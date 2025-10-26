@@ -29,7 +29,7 @@
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/yourusername/speedtest-monitor.git
+git clone https://github.com/sokolovmo/speedtest-monitor.git
 cd speedtest-monitor
 
 # 2. Run automated installation
@@ -127,7 +127,7 @@ This project is licensed under the MIT License - see [LICENSE](LICENSE) file.
 
 ```bash
 # 1. Клонируйте репозиторий
-git clone https://github.com/yourusername/speedtest-monitor.git
+git clone https://github.com/sokolovmo/speedtest-monitor.git
 cd speedtest-monitor
 
 # 2. Запустите автоматическую установку
@@ -212,6 +212,6 @@ speedtest-monitor/
 
 Made with ❤️ for System Administrators and DevOps Engineers
 
-[Report Bug](https://github.com/yourusername/speedtest-monitor/issues) · [Request Feature](https://github.com/yourusername/speedtest-monitor/issues)
+[Report Bug](https://github.com/sokolovmo/speedtest-monitor/issues) · [Request Feature](https://github.com/sokolovmo/speedtest-monitor/issues)
 
 </div>
