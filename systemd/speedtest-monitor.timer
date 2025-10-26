@@ -1,0 +1,16 @@
+[Unit]
+Description=Speedtest Monitor Timer - Runs speedtest checks hourly
+Requires=speedtest-monitor.service
+
+[Timer]
+# Run hourly
+OnCalendar=hourly
+
+# Run 5 minutes after boot
+OnBootSec=5min
+
+# If missed schedule, run immediately
+Persistent=true
+
+[Install]
+WantedBy=timers.target

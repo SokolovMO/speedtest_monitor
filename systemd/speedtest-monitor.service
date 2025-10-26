@@ -1,0 +1,32 @@
+[Unit]
+Description=Speedtest Monitor - Internet Speed Monitoring Service
+Documentation=https://github.com/yourusername/speedtest-monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=%i
+Group=%i
+WorkingDirectory=/opt/speedtest-monitor
+ExecStart=/opt/speedtest-monitor/.venv/bin/python -m speedtest_monitor.main
+
+# Environment
+Environment="PATH=/opt/speedtest-monitor/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=speedtest-monitor
+
+# Security hardening
+PrivateTmp=true
+NoNewPrivileges=true
+ReadWritePaths=/opt/speedtest-monitor/speedtest.log
+
+# Restart policy
+Restart=on-failure
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

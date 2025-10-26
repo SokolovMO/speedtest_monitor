@@ -1,0 +1,97 @@
+# ============================================
+# Speedtest Monitor Configuration
+# ============================================
+
+# Server identification
+# Use "auto" for automatic detection or set manually
+server:
+  # Server name (hostname if "auto")
+  name: "auto"
+  
+  # Server location (IP geolocation if "auto")
+  location: "auto"
+  
+  # Unique server identifier (hostname if "auto")
+  identifier: "auto"
+  
+  # Custom description for this server
+  description: "Production Web Server #1"
+
+# Speedtest configuration
+speedtest:
+  # Timeout for speedtest execution (seconds)
+  timeout: 30
+  
+  # Specific speedtest server IDs (empty = auto-select best server)
+  # Find servers: speedtest-cli --list
+  servers: []
+  # Example for specific servers:
+  # servers:
+  #   - 28912  # Beeline Moscow
+  #   - 24226  # MTS Moscow
+  
+  # Number of retry attempts if speedtest fails
+  retry_count: 3
+  
+  # Delay between retry attempts (seconds)
+  retry_delay: 5
+
+# Speed thresholds (Mbps)
+# Adjust based on your server type and expected speeds
+thresholds:
+  # Below this = 🚨❌ Very Low
+  very_low: 50
+  
+  # Between very_low and this = ⚠️🐌 Low
+  low: 200
+  
+  # Between low and this = ✅🚗 Normal
+  medium: 500
+  
+  # Above medium = 👍🛜 Good or 🚀⚡ Excellent
+  good: 1000
+
+# Telegram notification settings
+telegram:
+  # Send notifications even when speed is good
+  # true = always send, false = only send when speed is low or errors occur
+  send_always: false
+  
+  # Message format: "html" or "markdown"
+  format: "html"
+
+# Logging configuration
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
+  
+  # Log file path (relative or absolute)
+  file: "speedtest.log"
+  
+  # When to rotate log file (size or time based)
+  # Examples: "10 MB", "1 day", "1 week", "monday"
+  rotation: "10 MB"
+  
+  # How long to keep old log files
+  # Examples: "1 week", "1 month", "3 months"
+  retention: "1 week"
+
+# ============================================
+# Configuration Examples by Server Type
+# ============================================
+
+# Web Server (high traffic):
+# thresholds: {very_low: 100, low: 500, medium: 1000, good: 2000}
+
+# Database Server (stability important):
+# thresholds: {very_low: 50, low: 200, medium: 500, good: 1000}
+# telegram: {send_always: true}
+
+# CDN/Edge Server (maximum speed):
+# thresholds: {very_low: 500, low: 1000, medium: 2000, good: 5000}
+
+# Office Server (normal requirements):
+# thresholds: {very_low: 25, low: 100, medium: 300, good: 500}
+
+# Home Server:
+# thresholds: {very_low: 10, low: 50, medium: 100, good: 200}
