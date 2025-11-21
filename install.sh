@@ -244,6 +244,7 @@ setup_directory() {
     # Copy project files
     log_info "Copying project files..."
     cp -r speedtest_monitor "$INSTALL_DIR/"
+    cp -r systemd "$INSTALL_DIR/"
     cp pyproject.toml "$INSTALL_DIR/"
     cp config.yaml.example "$INSTALL_DIR/config.yaml"
     cp .env.example "$INSTALL_DIR/.env"
@@ -356,12 +357,9 @@ setup_systemd() {
     
     log_header "Setting Up Systemd Service"
     
-    # Save current directory
-    local SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-    
-    # Copy service files from source directory
-    sudo cp "$SCRIPT_DIR/systemd/speedtest-monitor.service" /etc/systemd/system/
-    sudo cp "$SCRIPT_DIR/systemd/speedtest-monitor.timer" /etc/systemd/system/
+    # Copy service files from installation directory
+    sudo cp "$INSTALL_DIR/systemd/speedtest-monitor.service" /etc/systemd/system/
+    sudo cp "$INSTALL_DIR/systemd/speedtest-monitor.timer" /etc/systemd/system/
     
     # Update service file with correct user
     sudo sed -i.bak "s/User=%i/User=$INSTALL_USER/" /etc/systemd/system/speedtest-monitor.service
