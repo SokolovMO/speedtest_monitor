@@ -8,17 +8,15 @@ Documentation=https://github.com/SokolovMO/speedtest_monitor
 # ============================================================================
 # Uncomment ONE of the timer configurations below:
 
-# --- OPTION 1: Interval-based (relative to last completion) ---
-# Recommended for most use cases
-OnBootSec=1min
-OnUnitActiveSec=10min
-AccuracySec=1min
+# --- Default: Every hour ---
+OnCalendar=hourly
 
-# --- OPTION 2: Calendar-based (fixed schedule) ---
-# Uncomment to use calendar scheduling instead
+# --- Alternative Options (uncomment ONE to use instead) ---
 
-# Every hour at :00
-#OnCalendar=hourly
+# Interval-based (relative to last completion)
+#OnBootSec=1min
+#OnUnitActiveSec=1h
+#AccuracySec=1min
 
 # Every 30 minutes (:00 and :30)
 #OnCalendar=*:0/30
@@ -28,6 +26,9 @@ AccuracySec=1min
 
 # Every 5 minutes
 #OnCalendar=*:0/5
+
+# Every minute
+#OnCalendar=*:*
 
 # Daily at midnight
 #OnCalendar=*-*-* 00:00:00
