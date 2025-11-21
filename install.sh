@@ -356,9 +356,12 @@ setup_systemd() {
     
     log_header "Setting Up Systemd Service"
     
-    # Copy service files
-    sudo cp systemd/speedtest-monitor.service /etc/systemd/system/
-    sudo cp systemd/speedtest-monitor.timer /etc/systemd/system/
+    # Save current directory
+    local SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+    
+    # Copy service files from source directory
+    sudo cp "$SCRIPT_DIR/systemd/speedtest-monitor.service" /etc/systemd/system/
+    sudo cp "$SCRIPT_DIR/systemd/speedtest-monitor.timer" /etc/systemd/system/
     
     # Update service file with correct user
     sudo sed -i.bak "s/User=%i/User=$INSTALL_USER/" /etc/systemd/system/speedtest-monitor.service
