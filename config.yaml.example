@@ -49,14 +49,14 @@ thresholds:
 
 # Telegram notification settings
 telegram:
-  # Bot token (get from @BotFather)
-  bot_token: "${TELEGRAM_BOT_TOKEN}"
+  # Bot token is loaded from TELEGRAM_BOT_TOKEN environment variable (.env file)
   
   # Chat IDs for notifications (REQUIRED - at least one!)
+  # Replace with your actual Telegram chat ID(s)
   # For personal messages, use your user_id here
   # Get it: @userinfobot or https://api.telegram.org/bot<TOKEN>/getUpdates
   chat_ids:
-    - "${TELEGRAM_CHAT_ID}"
+    - "YOUR_CHAT_ID_HERE"
   
   # Check interval in seconds (3600 = 1 hour, 1800 = 30 min, 7200 = 2 hours)
   check_interval: 3600

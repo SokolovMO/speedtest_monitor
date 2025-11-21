@@ -308,18 +308,29 @@ configure_app() {
     # Update .env file
     cat > .env << EOF
 TELEGRAM_BOT_TOKEN=$BOT_TOKEN
-TELEGRAM_CHAT_ID=$CHAT_ID
 EOF
     
     chmod 600 .env
     log_success "Configuration saved to $INSTALL_DIR/.env"
     
+    # Update config.yaml with chat_id
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS
+        sed -i '' "s/YOUR_CHAT_ID_HERE/$CHAT_ID/" config.yaml
+    else
+        # Linux
+        sed -i "s/YOUR_CHAT_ID_HERE/$CHAT_ID/" config.yaml
+    fi
+    
     # Server description
     echo ""
     read -p "Enter server description (optional): " SERVER_DESC
     if [[ -n "$SERVER_DESC" ]]; then
-        sed -i.bak "s/description: \".*\"/description: \"$SERVER_DESC\"/" config.yaml
-        rm -f config.yaml.bak
+        if [[ "$OSTYPE" == "darwin"* ]]; then
+            sed -i '' "s/description: \".*\"/description: \"$SERVER_DESC\"/" config.yaml
+        else
+            sed -i "s/description: \".*\"/description: \"$SERVER_DESC\"/" config.yaml
+        fi
     fi
     
     log_success "Application configured"
