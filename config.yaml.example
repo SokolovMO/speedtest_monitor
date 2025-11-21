@@ -20,15 +20,11 @@ server:
 # Speedtest configuration
 speedtest:
   # Timeout for speedtest execution (seconds)
-  timeout: 30
+  timeout: 90
   
   # Specific speedtest server IDs (empty = auto-select best server)
   # Find servers: speedtest-cli --list
   servers: []
-  # Example for specific servers:
-  # servers:
-  #   - 28912  # Beeline Moscow
-  #   - 24226  # MTS Moscow
   
   # Number of retry attempts if speedtest fails
   retry_count: 3
@@ -39,22 +35,34 @@ speedtest:
 # Speed thresholds (Mbps)
 # Adjust based on your server type and expected speeds
 thresholds:
-  # Below this = 🚨❌ Very Low
+  # Below this = 🚨 Very Low
   very_low: 50
   
-  # Between very_low and this = ⚠️🐌 Low
+  # Between very_low and this = ⚠️ Low
   low: 200
   
-  # Between low and this = ✅🚗 Normal
+  # Between low and this = ✅ Normal
   medium: 500
   
-  # Above medium = 👍🛜 Good or 🚀⚡ Excellent
+  # Above medium = 🚀 Excellent
   good: 1000
 
 # Telegram notification settings
 telegram:
+  # Bot token (get from @BotFather)
+  bot_token: "${TELEGRAM_BOT_TOKEN}"
+  
+  # Chat IDs for notifications (REQUIRED - at least one!)
+  # For personal messages, use your user_id here
+  # Get it: @userinfobot or https://api.telegram.org/bot<TOKEN>/getUpdates
+  chat_ids:
+    - "${TELEGRAM_CHAT_ID}"
+  
+  # Check interval in seconds (3600 = 1 hour, 1800 = 30 min, 7200 = 2 hours)
+  check_interval: 3600
+  
   # Send notifications even when speed is good
-  # true = always send, false = only send when speed is low or errors occur
+  # true = always send, false = only when speed is low or errors
   send_always: false
   
   # Message format: "html" or "markdown"

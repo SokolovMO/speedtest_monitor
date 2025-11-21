@@ -261,11 +261,11 @@ setup_python_env() {
     
     cd "$INSTALL_DIR"
     
-    log_info "Creating virtual environment..."
+    log_info "Creating virtual environment with UV..."
     uv venv
     
-    log_info "Installing dependencies..."
-    uv pip install -e .
+    log_info "Installing dependencies with UV sync..."
+    uv sync
     
     log_success "Python environment ready"
 }

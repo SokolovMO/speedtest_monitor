@@ -48,9 +48,12 @@ class TelegramConfig:
     """Telegram bot configuration."""
 
     bot_token: str
-    chat_id: str
+    chat_ids: List[str] = field(default_factory=list)
+    check_interval: int = 3600
     send_always: bool = False
     format: str = "html"
+    
+
 
 
 @dataclass
@@ -102,14 +105,12 @@ def load_config(config_path: Path) -> Config:
 
     # Check required environment variables
     bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID")
 
     if not bot_token:
         raise ConfigurationError(
-            "TELEGRAM_BOT_TOKEN environment variable is required"
+            "TELEGRAM_BOT_TOKEN environment variable is required. "
+            "Set it in .env file or export TELEGRAM_BOT_TOKEN=your_token"
         )
-    if not chat_id:
-        raise ConfigurationError("TELEGRAM_CHAT_ID environment variable is required")
 
     # Load YAML configuration
     if not config_path.exists():
@@ -128,11 +129,23 @@ def load_config(config_path: Path) -> Config:
         thresholds_config = ThresholdsConfig(**yaml_config.get("thresholds", {}))
         logging_config = LoggingConfig(**yaml_config.get("logging", {}))
 
+        # Parse Telegram configuration
+        telegram_yaml = yaml_config.get("telegram", {})
+        
+        # Get chat_ids from YAML (ONLY from config.yaml, not from .env)
+        chat_ids = telegram_yaml.get("chat_ids", [])
+        
+        if not chat_ids:
+            raise ConfigurationError(
+                "At least one chat_id must be specified in config.yaml under telegram.chat_ids"
+            )
+        
         telegram_config = TelegramConfig(
             bot_token=bot_token,
-            chat_id=chat_id,
-            send_always=yaml_config.get("telegram", {}).get("send_always", False),
-            format=yaml_config.get("telegram", {}).get("format", "html"),
+            chat_ids=chat_ids,
+            check_interval=telegram_yaml.get("check_interval", 3600),
+            send_always=telegram_yaml.get("send_always", False),
+            format=telegram_yaml.get("format", "html"),
         )
 
         return Config(

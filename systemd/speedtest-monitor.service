@@ -1,13 +1,13 @@
 [Unit]
 Description=Speedtest Monitor - Internet Speed Monitoring Service
-Documentation=https://github.com/yourusername/speedtest-monitor
+Documentation=https://github.com/SokolovMO/speedtest_monitor
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=oneshot
-User=%i
-Group=%i
+User=speedtest
+Group=speedtest
 WorkingDirectory=/opt/speedtest-monitor
 ExecStart=/opt/speedtest-monitor/.venv/bin/python -m speedtest_monitor.main
 

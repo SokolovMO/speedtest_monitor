@@ -6,14 +6,18 @@ Common helper functions used across the application.
 
 import platform
 import socket
+from functools import lru_cache
 from typing import Dict, Optional
 
 import requests
 
 
+@lru_cache(maxsize=1)
 def get_system_info() -> Dict[str, str]:
     """
     Get system information (OS, hostname, etc.).
+    
+    Cached to avoid repeated system calls.
 
     Returns:
         Dictionary with system information
@@ -45,7 +49,8 @@ def get_public_ip() -> Optional[str]:
         '192.168.1.1'
     """
     try:
-        response = requests.get("https://api.ipify.org", timeout=5)
+        response = requests.get("https://api.ipify.org", timeout=3)
+        response.raise_for_status()
         return response.text.strip()
     except Exception:
         return None
@@ -73,10 +78,17 @@ def get_location_by_ip(ip: Optional[str] = None) -> Optional[str]:
         return None
 
     try:
-        response = requests.get(f"https://ipapi.co/{ip}/json/", timeout=5)
+        response = requests.get(
+            f"https://ipapi.co/{ip}/json/", 
+            timeout=3,
+            headers={"User-Agent": "speedtest-monitor/1.0"}
+        )
+        response.raise_for_status()
         data = response.json()
+        
         city = data.get("city", "")
         country = data.get("country_name", "")
+        
         if city and country:
             return f"{city}, {country}"
         elif country:

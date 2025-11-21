@@ -4,6 +4,8 @@ Speedtest execution module.
 Handles running speedtest and collecting results.
 """
 
+import json
+import re
 import subprocess
 import time
 from dataclasses import dataclass
@@ -11,6 +13,12 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from .config import SpeedtestConfig
+from .constants import (
+    DEFAULT_RETRY_COUNT,
+    DEFAULT_RETRY_DELAY,
+    DEFAULT_TIMEOUT,
+    SPEEDTEST_COMMANDS,
+)
 from .logger import get_logger
 
 logger = get_logger()
@@ -100,6 +108,12 @@ class SpeedtestRunner:
     ) -> Optional[SpeedtestResult]:
         """
         Parse speedtest command output.
+        
+        Supports multiple output formats:
+        - Official Ookla speedtest JSON (--format=json)
+        - Official Ookla speedtest human-readable
+        - speedtest-cli plain text
+        - speedtest-cli --simple format
 
         Args:
             output: Command output text
@@ -109,6 +123,43 @@ class SpeedtestRunner:
             Parsed result or None if parsing failed
         """
         try:
+            # Try JSON format first (official speedtest with --format=json)
+            if output.strip().startswith("{"):
+                try:
+                    data = json.loads(output)
+                    # Official Ookla speedtest JSON format
+                    if "download" in data and "bandwidth" in data.get("download", {}):
+                        return SpeedtestResult(
+                            download_mbps=data["download"]["bandwidth"] / 125000,  # bits to Mbps
+                            upload_mbps=data["upload"]["bandwidth"] / 125000,
+                            ping_ms=data.get("ping", {}).get("latency", 0),
+                            server_name=data.get("server", {}).get("name", "Unknown"),
+                            server_location=data.get("server", {}).get("location", "Unknown"),
+                            isp=data.get("isp", "Unknown"),
+                            success=True,
+                        )
+                except (json.JSONDecodeError, KeyError, TypeError) as e:
+                    logger.debug(f"Failed to parse as JSON: {e}")
+
+            # Parse text output with regex patterns
+            # Try speedtest-cli --simple format first (most structured)
+            simple_match = re.search(
+                r"Ping:\s+([\d.]+)\s+ms.*?Download:\s+([\d.]+)\s+Mbit/s.*?Upload:\s+([\d.]+)\s+Mbit/s",
+                output,
+                re.DOTALL | re.IGNORECASE,
+            )
+            if simple_match:
+                return SpeedtestResult(
+                    download_mbps=float(simple_match.group(2)),
+                    upload_mbps=float(simple_match.group(3)),
+                    ping_ms=float(simple_match.group(1)),
+                    server_name="Unknown",
+                    server_location="Unknown",
+                    isp="Unknown",
+                    success=True,
+                )
+
+            # Parse human-readable format line by line
             lines = output.strip().split("\n")
             result_data = {}
 
@@ -117,31 +168,41 @@ class SpeedtestRunner:
                 if not line:
                     continue
 
-                # Parse different output formats
-                if "Download:" in line or "download:" in line.lower():
-                    parts = line.split(":")
-                    if len(parts) >= 2:
-                        speed_str = parts[1].strip().split()[0]
-                        result_data["download"] = float(speed_str)
+                # Match download speed (various formats)
+                download_match = re.search(
+                    r"(?:Download|download):\s+([\d.]+)\s+(?:Mbit/s|Mbps)",
+                    line,
+                    re.IGNORECASE,
+                )
+                if download_match:
+                    result_data["download"] = float(download_match.group(1))
 
-                elif "Upload:" in line or "upload:" in line.lower():
-                    parts = line.split(":")
-                    if len(parts) >= 2:
-                        speed_str = parts[1].strip().split()[0]
-                        result_data["upload"] = float(speed_str)
+                # Match upload speed
+                upload_match = re.search(
+                    r"(?:Upload|upload):\s+([\d.]+)\s+(?:Mbit/s|Mbps)",
+                    line,
+                    re.IGNORECASE,
+                )
+                if upload_match:
+                    result_data["upload"] = float(upload_match.group(1))
 
-                elif "Latency:" in line or "ping:" in line.lower():
-                    parts = line.split(":")
-                    if len(parts) >= 2:
-                        ping_str = parts[1].strip().split()[0]
-                        result_data["ping"] = float(ping_str)
+                # Match ping/latency
+                ping_match = re.search(
+                    r"(?:Latency|latency|Ping|ping):\s+([\d.]+)\s+ms",
+                    line,
+                    re.IGNORECASE,
+                )
+                if ping_match:
+                    result_data["ping"] = float(ping_match.group(1))
 
-                elif "Server:" in line:
+                # Match server info
+                if "Server:" in line:
                     parts = line.split(":", 1)
                     if len(parts) >= 2:
                         result_data["server"] = parts[1].strip()
 
-                elif "ISP:" in line:
+                # Match ISP
+                if "ISP:" in line:
                     parts = line.split(":", 1)
                     if len(parts) >= 2:
                         result_data["isp"] = parts[1].strip()
@@ -158,7 +219,9 @@ class SpeedtestRunner:
                     success=True,
                 )
 
+            logger.warning("Could not extract download/upload speeds from output")
             return None
+            
         except Exception as e:
             logger.error(f"Error parsing speedtest output: {e}")
             return None
@@ -211,9 +274,12 @@ class SpeedtestRunner:
                         else:
                             cmd.extend(["--server-id", str(self.config.servers[0])])
 
-                    # Add JSON output if supported
+                    # Try JSON output first for better parsing (official speedtest only)
                     if "speedtest-cli" not in command:
-                        cmd.append("--format=human-readable")
+                        cmd.append("--format=json")
+                    else:
+                        # Use --simple for speedtest-cli for more structured output
+                        cmd.append("--simple")
 
                     # Execute command
                     result = subprocess.run(

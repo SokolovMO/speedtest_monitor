@@ -1,12 +1,12 @@
 # 🚀 Speedtest Monitor
 
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![UV](https://img.shields.io/badge/package%20manager-UV-blue)](https://github.com/astral-sh/uv)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-**Production-ready internet speed monitoring tool with Telegram notifications for multiple servers.**
+**Production-ready internet speed monitoring with Telegram notifications for multiple servers. Powered by UV package manager.**
 
-[English](#english) | [Русский](#русский)
+[🇺🇸 English](#english) | [🇷🇺 Русский](README_RU.md)
 
 ---
 
@@ -14,204 +14,383 @@
 
 ### 🎯 Features
 
-- **🔄 Automated Monitoring** - Scheduled speedtest execution with intelligent retry logic
-- **📱 Telegram Integration** - Real-time notifications with formatted reports
-- **🖥️ Multi-Server Support** - Monitor multiple servers with centralized reporting
-- **🎯 Smart Thresholds** - Configurable speed thresholds with visual indicators
-- **🔍 Auto-Detection** - Automatic server identification and speedtest command discovery
-- **📊 Detailed Reporting** - Comprehensive stats including speed, ping, ISP, and OS info
-- **⚙️ Flexible Configuration** - YAML configuration with environment variable support
-- **🔧 Easy Deployment** - Automated installation with systemd/cron integration
-- **📝 Production Logging** - Rotating logs with configurable verbosity levels
-- **🛡️ Error Handling** - Robust error handling with graceful degradation
+- **⚡ Lightning Fast** - Powered by UV, the fastest Python package manager
+- **🌐 Multi-Server Support** - Monitor unlimited servers from a single Telegram bot
+- **📱 Smart Notifications** - Aggregated reports sent to multiple chats/users
+- **🔄 Flexible Scheduling** - Configurable check intervals (hourly, daily, custom)
+- **🎨 Beautiful Reports** - Color-coded status with emojis (✅⚠️🚨)
+- **🔍 Auto-Detection** - Automatic server identification and location
+- **📊 Rich Statistics** - Download, upload, ping, ISP, server info
+- **🛡️ Robust** - Retry logic, graceful shutdown, comprehensive error handling
+- **🚀 Easy Deployment** - One-line installation script
+- **🐍 Modern Python** - Built for Python 3.9+ with type hints
 
-### 📦 Quick Start
+### 📦 Prerequisites
 
+#### 1. Install UV Package Manager
+
+UV is a modern, blazing-fast Python package manager (10-100x faster than pip).
+
+**Linux/macOS:**
 ```bash
-# 1. Clone the repository
-git clone https://github.com/sokolovmo/speedtest-monitor.git
-cd speedtest-monitor
-
-# 2. Run automated installation
-./install_new.sh
-
-# 3. Configure (if not done during installation)
-cp .env.example .env
-# Edit .env with your Telegram credentials
-
-# 4. Test
-./venv/bin/python -m speedtest_monitor.main
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-### 🛠️ Requirements
-
-- **Python** 3.9 or higher
-- **speedtest-cli** or official Ookla Speedtest
-- **Linux** (Ubuntu/Debian/RHEL/CentOS), **macOS**, or **FreeBSD**
-- **Telegram Bot** (get token from [@BotFather](https://t.me/BotFather))
-
-### 📖 Documentation
-
-- **[Installation Guide](docs/INSTALLATION_EN.md)** - Step-by-step installation instructions
-- **[Configuration Guide](docs/CONFIGURATION_EN.md)** - Complete configuration reference
-- **[Deployment Guide](docs/DEPLOYMENT_EN.md)** - Multi-server deployment strategies
-- **[Troubleshooting](docs/TROUBLESHOOTING_EN.md)** - Common issues and solutions
-
-### 🏗️ Architecture
-
-```
-speedtest-monitor/
-├── speedtest_monitor/          # Main package
-│   ├── config.py              # Configuration management
-│   ├── logger.py              # Logging setup
-│   ├── speedtest_runner.py   # Speedtest execution
-│   ├── telegram_notifier.py  # Telegram integration
-│   ├── utils.py               # Helper functions
-│   └── main.py                # Entry point
-├── systemd/                    # Systemd service files
-├── docs/                       # Documentation
-├── config.yaml.example         # Configuration template
-├── .env.example               # Environment template
-├── install_new.sh             # Installation script
-└── pyproject.toml             # Project metadata
+**Windows:**
+```powershell
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-### 📊 Example Output
-
-```
-📊 Internet Speed Report
-
-🖥 Server: web-prod-01 (Moscow)
-📝 Description: Production Web Server #1
-🆔 ID: web01.company.com
-🕐 Time: 2025-10-26 15:30:15
-
-📶 Results:
-⬇️ Download: 545.86 Mbps
-⬆️ Upload: 613.92 Mbps
-📡 Ping: 4.49 ms
-
-📈 Status: 👍🛜 Good
-
-🌐 Test Server: Moscow, Russia
-🏢 ISP: Provider Name
-💻 OS: Linux 5.4.0
+**Verify installation:**
+```bash
+uv --version
 ```
 
-### 🤝 Contributing
+Learn more: [UV Documentation](https://github.com/astral-sh/uv)
 
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+#### 2. Python Version
 
-### 📝 License
+This project requires **Python >= 3.9** (recommended: **3.9.6**)
 
-This project is licensed under the MIT License - see [LICENSE](LICENSE) file.
+**Install specific Python version via UV:**
+```bash
+# Install Python 3.9.6
+uv python install 3.9.6
+
+# List installed versions
+uv python list
+
+# Set project Python version
+uv venv --python 3.9.6
+```
+
+**Upgrade to newer Python version:**
+```bash
+# Install Python 3.11
+uv python install 3.11
+
+# Recreate virtual environment
+rm -rf .venv
+uv venv --python 3.11
+
+# Reinstall dependencies
+uv sync
+```
+
+#### 3. Telegram Bot
+
+Create a Telegram bot to receive notifications:
+
+1. Message [@BotFather](https://t.me/BotFather) on Telegram
+2. Send `/newbot` and follow instructions
+3. Save your **bot token** (looks like `123456:ABC-DEF1234ghIkl...`)
+4. Get your **chat ID**:
+   - Send any message to your bot
+   - Open: `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates`
+   - Find `"chat":{"id":123456789}` in response
+5. (Optional) Get **user IDs** for personal messages:
+   - Message [@userinfobot](https://t.me/userinfobot)
+   - Bot will reply with your user ID
 
 ---
 
-## Русский
+## 🚀 Quick Start
 
-### 🎯 Возможности
+### Option 1: Automated Installation (Recommended)
 
-- **🔄 Автоматический мониторинг** - Запланированное выполнение speedtest с интеллектуальной логикой повторов
-- **📱 Интеграция с Telegram** - Уведомления в реальном времени с форматированными отчетами
-- **🖥️ Поддержка множественных серверов** - Мониторинг нескольких серверов с централизованной отчетностью
-- **🎯 Умные пороги** - Настраиваемые пороги скорости с визуальными индикаторами
-- **🔍 Авто-определение** - Автоматическая идентификация сервера и обнаружение команд speedtest
-- **📊 Детальная отчетность** - Полная статистика: скорость, пинг, провайдер, информация об ОС
-- **⚙️ Гибкая конфигурация** - YAML конфигурация с поддержкой переменных окружения
-- **🔧 Простое развертывание** - Автоматическая установка с интеграцией systemd/cron
-- **📝 Продакшн-логирование** - Ротация логов с настраиваемым уровнем детализации
-- **🛡️ Обработка ошибок** - Надежная обработка ошибок с изящной деградацией
-
-### 📦 Быстрый старт
+Install everything with one command:
 
 ```bash
-# 1. Клонируйте репозиторий
-git clone https://github.com/sokolovmo/speedtest-monitor.git
-cd speedtest-monitor
+curl -sSL https://raw.githubusercontent.com/SokolovMO/speedtest_monitor/main/install.sh | bash
+```
 
-# 2. Запустите автоматическую установку
-./install_new.sh
+The script will:
+- ✅ Install UV if not present
+- ✅ Install Python 3.9.6 via UV
+- ✅ Set up virtual environment
+- ✅ Install all dependencies with `uv sync`
+- ✅ Interactively configure Telegram settings
+- ✅ Create `config.yaml` from template
+- ✅ Set up systemd timer (Linux) or cron (macOS)
+- ✅ Run tests to verify installation
 
-# 3. Настройте (если не сделано при установке)
+### Option 2: Manual Installation
+
+```bash
+# 1. Clone repository
+git clone https://github.com/SokolovMO/speedtest_monitor.git
+cd speedtest_monitor
+
+# 2. Create virtual environment with UV
+uv venv --python 3.9.6
+
+# 3. Install dependencies
+uv sync
+
+# 4. Configure
 cp .env.example .env
-# Отредактируйте .env с вашими учетными данными Telegram
+cp config.yaml.example config.yaml
 
-# 4. Протестируйте
-./venv/bin/python -m speedtest_monitor.main
+# Edit configuration files
+nano .env          # Add TELEGRAM_BOT_TOKEN
+nano config.yaml   # Configure settings
+
+# 5. Test run
+uv run python -m speedtest_monitor.main
+
+# 6. Check logs
+tail -f speedtest.log
 ```
-
-### 🛠️ Требования
-
-- **Python** 3.9 или выше
-- **speedtest-cli** или официальный Ookla Speedtest
-- **Linux** (Ubuntu/Debian/RHEL/CentOS), **macOS** или **FreeBSD**
-- **Telegram Бот** (получите токен от [@BotFather](https://t.me/BotFather))
-
-### 📖 Документация
-
-- **[Руководство по установке](docs/INSTALLATION_RU.md)** - Пошаговые инструкции по установке
-- **[Руководство по конфигурации](docs/CONFIGURATION_RU.md)** - Полный справочник по настройке
-- **[Руководство по развертыванию](docs/DEPLOYMENT_RU.md)** - Стратегии развертывания на множественных серверах
-- **[Решение проблем](docs/TROUBLESHOOTING_RU.md)** - Распространенные проблемы и решения
-
-### 🏗️ Архитектура
-
-```
-speedtest-monitor/
-├── speedtest_monitor/          # Основной пакет
-│   ├── config.py              # Управление конфигурацией
-│   ├── logger.py              # Настройка логирования
-│   ├── speedtest_runner.py   # Выполнение speedtest
-│   ├── telegram_notifier.py  # Интеграция с Telegram
-│   ├── utils.py               # Вспомогательные функции
-│   └── main.py                # Точка входа
-├── systemd/                    # Файлы systemd сервиса
-├── docs/                       # Документация
-├── config.yaml.example         # Шаблон конфигурации
-├── .env.example               # Шаблон окружения
-├── install_new.sh             # Скрипт установки
-└── pyproject.toml             # Метаданные проекта
-```
-
-### 📊 Пример вывода
-
-```
-📊 Отчет о скорости интернета
-
-🖥 Сервер: web-prod-01 (Москва)
-📝 Описание: Production Web Server #1
-🆔 ID: web01.company.com
-🕐 Время: 2025-10-26 15:30:15
-
-📶 Результаты:
-⬇️ Загрузка: 545.86 Мбит/с
-⬆️ Отдача: 613.92 Мбит/с
-📡 Пинг: 4.49 мс
-
-📈 Статус: 👍🛜 Хорошо
-
-🌐 Тестовый сервер: Москва, Россия
-🏢 Провайдер: Provider Name
-💻 ОС: Linux 5.4.0
-```
-
-### 🤝 Участие в разработке
-
-Мы приветствуем ваш вклад! Пожалуйста, прочитайте [CONTRIBUTING.md](CONTRIBUTING.md).
-
-### 📝 Лицензия
-
-Этот проект лицензирован под лицензией MIT - см. файл [LICENSE](LICENSE).
 
 ---
 
-<div align="center">
+## 🌐 Multi-Server Setup
 
-**⭐ Если проект полезен, поставьте звездочку! ⭐**
+Deploy on unlimited servers without master/node architecture. Each server runs independently and sends results to your Telegram.
 
-Made with ❤️ for System Administrators and DevOps Engineers
+### Step-by-Step Guide
 
-[Report Bug](https://github.com/sokolovmo/speedtest-monitor/issues) · [Request Feature](https://github.com/sokolovmo/speedtest-monitor/issues)
+**On each server:**
 
-</div>
+1. **Install speedtest_monitor**
+   ```bash
+   curl -sSL https://raw.githubusercontent.com/SokolovMO/speedtest_monitor/main/install.sh | bash
+   ```
+
+2. **Use same bot token everywhere**
+   - All servers use the SAME `TELEGRAM_BOT_TOKEN`
+   - Results arrive in aggregated format
+
+3. **Configure unique server identification**
+   ```yaml
+   server:
+     name: "web-server-01"           # Unique name
+     location: "New York, USA"        # Or "auto"
+     identifier: "prod-web-01"        # Unique ID
+     description: "Production Web Server #1"
+   ```
+
+4. **Set check intervals**
+   ```yaml
+   telegram:
+     check_interval: 3600  # 1 hour (adjust per server needs)
+   ```
+
+5. **Configure recipients**
+   ```yaml
+   telegram:
+     # Send to group chats
+     chat_ids:
+       - "-1001234567890"        # DevOps Team
+       - "-1009876543210"        # Monitoring Alerts
+     
+     # Send personal messages
+     user_ids:
+       - 123456789               # Admin 1
+       - 987654321               # Admin 2
+   ```
+
+### 📊 Aggregated Report Example
+
+All servers report to one or multiple chats with beautiful formatting:
+
+```
+📊 Speedtest Report - 21.11.2025 14:47
+
+Server          | Download  | Upload   | Ping  | Status
+----------------|-----------|----------|-------|--------
+web-server-01   | 250 Mbps  | 125 Mbps | 15 ms | ✅
+db-server-02    | 180 Mbps  | 90 Mbps  | 22 ms | ✅
+backup-srv-03   | 95 Mbps   | 45 Mbps  | 35 ms | ⚠️
+cache-srv-04    | 45 Mbps   | 20 Mbps  | 68 ms | 🚨
+
+🔔 2 servers need attention
+```
+
+---
+
+## ⚙️ Configuration
+
+### Quick Configuration Reference
+
+```yaml
+# Server identification
+server:
+  name: "auto"                    # or "web-server-01"
+  location: "auto"                # or "New York, USA"
+  identifier: "auto"              # or "prod-web-01"
+  description: "My Server"
+
+# Speedtest settings
+speedtest:
+  timeout: 30                     # seconds
+  servers: []                     # empty = auto-select
+  retry_count: 3
+  retry_delay: 5
+
+# Speed thresholds (Mbps)
+thresholds:
+  very_low: 50      # 🚨
+  low: 200          # ⚠️
+  medium: 500       # ✅
+  good: 1000        # 🚀
+
+# Telegram settings
+telegram:
+  bot_token: "${TELEGRAM_BOT_TOKEN}"
+  
+  chat_ids:         # Group/channel chats
+    - "${TELEGRAM_CHAT_ID}"
+  
+  user_ids: []      # Personal messages (optional)
+  
+  check_interval: 3600              # seconds (3600 = 1 hour)
+  send_always: false                # false = only alerts
+  format: "html"
+
+# Logging
+logging:
+  level: "INFO"
+  file: "speedtest.log"
+  rotation: "10 MB"
+  retention: "1 week"
+```
+
+**For detailed configuration options**, see [Configuration Guide](docs/configuration.md) | [Руководство по настройке](docs/configuration_ru.md)
+
+---
+
+## 📖 Documentation
+
+### 🚀 Quick Start Guide (Read in Order)
+
+1. **[📥 Installation](docs/installation.md)** - Automated installation with UV
+2. **[⚙️ Configuration](docs/configuration.md)** - Setup .env and config.yaml
+3. **[📅 Scheduling](docs/scheduling-guide.md)** - Configure systemd/cron
+4. **[🚀 Deployment](docs/deployment.md)** - Production deployment
+
+### 📚 Additional Resources
+
+| Document | Description |
+|----------|-------------|
+| [🌐 Multi-Server](docs/multi-server-architecture.md) | Architecture for multiple servers |
+| [✅ Quick Checklist](docs/quick-config-checklist.md) | Configuration cheat sheet |
+| [🔧 Troubleshooting](docs/troubleshooting.md) | Common issues and solutions |
+| [🇷🇺 Russian Docs](README_RU.md) | Полная документация на русском |
+
+---
+
+## 🛠️ Usage Examples
+
+```bash
+# Run speedtest once
+uv run python -m speedtest_monitor.main
+
+# Run with custom config
+uv run python -m speedtest_monitor.main --config /path/to/config.yaml
+
+# Enable debug logging
+uv run python -m speedtest_monitor.main --log-level DEBUG
+
+# Show version
+uv run python -m speedtest_monitor.main --version
+
+# Run tests
+uv run pytest
+
+# Check systemd status (Linux)
+sudo systemctl status speedtest-monitor.timer
+sudo journalctl -u speedtest-monitor -f
+
+# Manual cron setup (macOS/Linux)
+crontab -e
+# Add: 0 * * * * cd /path/to/speedtest_monitor && uv run python -m speedtest_monitor.main
+```
+
+---
+
+## 🏗️ Project Structure
+
+```
+speedtest-monitor/
+├── 📄 .python-version           # Python 3.9
+├── 📦 pyproject.toml            # UV configuration
+├── 🔒 uv.lock                   # Dependencies (auto-generated)
+├── 📖 README.md / README_RU.md  # Documentation
+├── ⚙️ config.yaml.example       # Configuration template
+├── 🔑 .env.example              # Secrets template
+├── 🚀 install.sh                # Automated installer
+│
+├── 📁 speedtest_monitor/        # Main code
+│   ├── main.py                  # Entry point
+│   ├── config.py                # Configuration loader
+│   ├── constants.py             # Constants
+│   ├── logger.py                # Logging
+│   ├── speedtest_runner.py     # Test execution
+│   ├── telegram_notifier.py   # Notifications
+│   └── utils.py                # Utilities
+│
+├── 📁 systemd/                  # Linux auto-start
+│   ├── speedtest-monitor.service
+│   └── speedtest-monitor.timer
+│
+├── 📁 docs/                     # Documentation
+│   ├── installation.md          # Installation
+│   ├── configuration.md         # Configuration
+│   ├── scheduling-guide.md      # Scheduling
+│   ├── deployment.md            # Deployment
+│   ├── multi-server-architecture.md
+│   ├── quick-config-checklist.md
+│   └── troubleshooting.md
+│
+└── 📁 tests/                    # Tests
+    ├── test_config.py
+    ├── test_speedtest_runner.py
+    └── test_telegram_notifier.py
+```
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 👤 Author
+
+**SokolovMO**
+
+- GitHub: [@SokolovMO](https://github.com/SokolovMO)
+- Repository: [speedtest_monitor](https://github.com/SokolovMO/speedtest_monitor)
+
+---
+
+## 🙏 Acknowledgments
+
+- [UV](https://github.com/astral-sh/uv) - Modern Python package manager
+- [speedtest-cli](https://github.com/sivel/speedtest-cli) - Command-line speedtest
+- [Ookla Speedtest](https://www.speedtest.net/apps/cli) - Official speedtest CLI
+- [aiogram](https://github.com/aiogram/aiogram) - Telegram Bot framework
+- [loguru](https://github.com/Delgan/loguru) - Python logging library
+
+---
+
+**⭐ If you find this project useful, please consider giving it a star!**
+
+---
+
+## 🔗 Quick Links
+
+- [Installation Guide](docs/installation.md)
+- [Configuration Examples](docs/configuration.md#examples)
+- [Multi-Server Setup](docs/deployment.md#multi-server-deployment)
+- [Troubleshooting](docs/troubleshooting.md)
+- [Issue Tracker](https://github.com/SokolovMO/speedtest_monitor/issues)
+- [Discussions](https://github.com/SokolovMO/speedtest_monitor/discussions)
