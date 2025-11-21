@@ -343,7 +343,7 @@ test_installation() {
     cd "$INSTALL_DIR"
     
     log_info "Testing configuration..."
-    if .venv/bin/python -c "from speedtest_monitor import load_config; load_config('config.yaml')" 2>/dev/null; then
+    if .venv/bin/python -c "from pathlib import Path; from speedtest_monitor.config import load_config; load_config(Path('config.yaml'))" 2>/dev/null; then
         log_success "Configuration test passed"
     else
         log_warning "Configuration test failed - please check .env file"

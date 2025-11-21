@@ -63,7 +63,7 @@ telegram:
   
   # Send notifications even when speed is good
   # true = always send, false = only when speed is low or errors
-  send_always: false
+  send_always: true
   
   # Message format: "html" or "markdown"
   format: "html"

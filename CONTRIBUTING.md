@@ -6,7 +6,7 @@ Thank you for your interest in contributing! 🎉
 
 ### Reporting Bugs
 
-- Use the [GitHub Issues](https://github.com/yourusername/speedtest-monitor/issues)
+- Use the [GitHub Issues](https://github.com/SokolovMO/speedtest_monitor/issues)
 - Describe the bug clearly with steps to reproduce
 - Include system information (OS, Python version)
 - Include relevant logs
@@ -30,20 +30,22 @@ Thank you for your interest in contributing! 🎉
 
 ```bash
 # Clone your fork
-git clone https://github.com/YOUR_USERNAME/speedtest-monitor.git
-cd speedtest-monitor
+git clone https://github.com/YOUR_USERNAME/speedtest_monitor.git
+cd speedtest_monitor
 
-# Install with dev dependencies
+# Install UV (if not installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Create virtual environment and install dependencies
 uv venv
-source .venv/bin/activate
-uv pip install -e ".[dev]"
+uv sync
 
 # Run linters
-ruff check .
-black --check .
+uv run ruff check speedtest_monitor/
+uv run black speedtest_monitor/
 
 # Run tests
-pytest
+uv run pytest
 ```
 
 ## Code Style

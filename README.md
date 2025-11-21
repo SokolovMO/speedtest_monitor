@@ -313,37 +313,37 @@ crontab -e
 
 ```
 speedtest-monitor/
-├── 📄 .python-version           # Python 3.9
-├── 📦 pyproject.toml            # UV configuration
-├── 🔒 uv.lock                   # Dependencies (auto-generated)
-├── 📖 README.md / README_RU.md  # Documentation
-├── ⚙️ config.yaml.example       # Configuration template
-├── 🔑 .env.example              # Secrets template
-├── 🚀 install.sh                # Automated installer
+├── 📄 .python-version          # Python 3.9
+├── 📦 pyproject.toml           # UV configuration
+├── 🔒 uv.lock                  # Dependencies (auto-generated)
+├── 📖 README.md / README_RU.md # Documentation
+├── ⚙️ config.yaml.example      # Configuration template
+├── 🔑 .env.example             # Secrets template
+├── 🚀 install.sh               # Automated installer
 │
-├── 📁 speedtest_monitor/        # Main code
-│   ├── main.py                  # Entry point
-│   ├── config.py                # Configuration loader
-│   ├── constants.py             # Constants
-│   ├── logger.py                # Logging
-│   ├── speedtest_runner.py     # Test execution
+├── 📁 speedtest_monitor/       # Main code
+│   ├── main.py                 # Entry point
+│   ├── config.py               # Configuration loader
+│   ├── constants.py            # Constants
+│   ├── logger.py               # Logging
+│   ├── speedtest_runner.py    # Test execution
 │   ├── telegram_notifier.py   # Notifications
 │   └── utils.py                # Utilities
 │
-├── 📁 systemd/                  # Linux auto-start
+├── 📁 systemd/                 # Linux auto-start
 │   ├── speedtest-monitor.service
 │   └── speedtest-monitor.timer
 │
-├── 📁 docs/                     # Documentation
-│   ├── installation.md          # Installation
-│   ├── configuration.md         # Configuration
-│   ├── scheduling-guide.md      # Scheduling
-│   ├── deployment.md            # Deployment
+├── 📁 docs/                    # Documentation
+│   ├── installation.md         # Installation
+│   ├── configuration.md        # Configuration
+│   ├── scheduling-guide.md     # Scheduling
+│   ├── deployment.md           # Deployment
 │   ├── multi-server-architecture.md
 │   ├── quick-config-checklist.md
 │   └── troubleshooting.md
 │
-└── 📁 tests/                    # Tests
+└── 📁 tests/                   # Tests
     ├── test_config.py
     ├── test_speedtest_runner.py
     └── test_telegram_notifier.py
