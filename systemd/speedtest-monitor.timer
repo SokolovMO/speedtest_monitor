@@ -1,16 +1,55 @@
 [Unit]
-Description=Speedtest Monitor Timer - Runs speedtest checks hourly
-Requires=speedtest-monitor.service
+Description=Speedtest Monitor Timer
+Documentation=https://github.com/SokolovMO/speedtest_monitor
 
 [Timer]
-# Run hourly
-OnCalendar=hourly
+# ============================================================================
+# Timer Configuration Examples
+# ============================================================================
+# Uncomment ONE of the timer configurations below:
 
-# Run 5 minutes after boot
-OnBootSec=5min
+# --- OPTION 1: Interval-based (relative to last completion) ---
+# Recommended for most use cases
+OnBootSec=1min
+OnUnitActiveSec=10min
+AccuracySec=1min
 
-# If missed schedule, run immediately
-Persistent=true
+# --- OPTION 2: Calendar-based (fixed schedule) ---
+# Uncomment to use calendar scheduling instead
+
+# Every hour at :00
+#OnCalendar=hourly
+
+# Every 30 minutes (:00 and :30)
+#OnCalendar=*:0/30
+
+# Every 10 minutes (:00, :10, :20, :30, :40, :50)
+#OnCalendar=*:0/10
+
+# Every 5 minutes
+#OnCalendar=*:0/5
+
+# Daily at midnight
+#OnCalendar=*-*-* 00:00:00
+
+# Every Monday at 9:00 AM
+#OnCalendar=Mon *-*-* 09:00:00
+
+# ============================================================================
+# Documentation:
+# - man systemd.timer
+# - https://www.freedesktop.org/software/systemd/man/systemd.timer.html
+# - https://www.freedesktop.org/software/systemd/man/systemd.time.html
+#
+# Test calendar syntax:
+#   systemd-analyze calendar "hourly"
+#   systemd-analyze calendar "*:0/10"
+#
+# After changes, run:
+#   sudo systemctl daemon-reload
+#   sudo systemctl restart speedtest-monitor.timer
+#   systemctl list-timers speedtest-monitor.timer
+# ============================================================================
 
 [Install]
 WantedBy=timers.target

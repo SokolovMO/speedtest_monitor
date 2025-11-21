@@ -373,8 +373,15 @@ setup_systemd() {
     sudo cp "$INSTALL_DIR/systemd/speedtest-monitor.timer" /etc/systemd/system/
     
     # Update service file with correct user
-    sudo sed -i.bak "s/User=%i/User=$INSTALL_USER/" /etc/systemd/system/speedtest-monitor.service
-    sudo sed -i.bak "s/Group=%i/Group=$(id -gn $INSTALL_USER)/" /etc/systemd/system/speedtest-monitor.service
+    if [[ $EUID -eq 0 ]]; then
+        # Running as root - use root user
+        sudo sed -i.bak "s/User=root/User=root/" /etc/systemd/system/speedtest-monitor.service
+        sudo sed -i.bak "s/Group=root/Group=root/" /etc/systemd/system/speedtest-monitor.service
+    else
+        # Running with sudo - use current user
+        sudo sed -i.bak "s/User=root/User=$INSTALL_USER/" /etc/systemd/system/speedtest-monitor.service
+        sudo sed -i.bak "s/Group=root/Group=$(id -gn $INSTALL_USER)/" /etc/systemd/system/speedtest-monitor.service
+    fi
     sudo rm -f /etc/systemd/system/speedtest-monitor.service.bak
     
     # Reload systemd

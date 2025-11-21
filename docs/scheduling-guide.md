@@ -74,30 +74,63 @@ journalctl -u speedtest-monitor.service -f
 
 ### Changing Frequency
 
-Edit `/etc/systemd/system/speedtest-monitor.timer`:
+The timer file (`/etc/systemd/system/speedtest-monitor.timer`) contains commented examples. Edit it:
+
+```bash
+sudo nano /etc/systemd/system/speedtest-monitor.timer
+```
+
+**Option 1: Interval-based (recommended)**
+
+Run every X minutes after previous completion:
 
 ```ini
 [Timer]
-# Choose ONE of the options:
+OnBootSec=1min                # Start 1 min after boot
+OnUnitActiveSec=10min        # Run every 10 minutes after completion
+AccuracySec=1min
+```
 
-# Every hour
+**Option 2: Calendar-based**
+
+Run at specific times:
+
+```ini
+[Timer]
+# Every hour at :00
 OnCalendar=hourly
 
-# Every 30 minutes
+# Every 30 minutes (:00 and :30)
 OnCalendar=*:0/30
 
-# Every 15 minutes
-OnCalendar=*:0/15
+# Every 10 minutes
+OnCalendar=*:0/10
 
-# Every 2 hours
-OnCalendar=0/2:00
+# Daily at midnight
+OnCalendar=*-*-* 00:00:00
 
-# At specific times (9:00, 12:00, 15:00, 18:00)
-OnCalendar=*-*-* 09,12,15,18:00:00
-
-# Every 6 hours starting from 00:00
-OnCalendar=0/6:00
+# Every Monday at 9:00 AM
+OnCalendar=Mon *-*-* 09:00:00
 ```
+
+**After changes:**
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart speedtest-monitor.timer
+systemctl list-timers speedtest-monitor.timer
+```
+
+**Test calendar syntax:**
+
+```bash
+systemd-analyze calendar "hourly"
+systemd-analyze calendar "*:0/10"
+```
+
+**Documentation:**
+- `man systemd.timer`
+- https://www.freedesktop.org/software/systemd/man/systemd.timer.html
 
 After changes:
 ```bash

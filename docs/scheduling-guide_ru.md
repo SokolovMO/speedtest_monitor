@@ -74,30 +74,63 @@ journalctl -u speedtest-monitor.service -f
 
 ### Изменение частоты
 
-Отредактируйте `/etc/systemd/system/speedtest-monitor.timer`:
+Файл таймера (`/etc/systemd/system/speedtest-monitor.timer`) содержит закомментированные примеры. Отредактируйте его:
+
+```bash
+sudo nano /etc/systemd/system/speedtest-monitor.timer
+```
+
+**Вариант 1: Интервальный запуск (рекомендуется)**
+
+Запуск каждые X минут после завершения предыдущего:
 
 ```ini
 [Timer]
-# Выберите ОДИН из вариантов:
+OnBootSec=1min                # Старт через 1 мин после загрузки
+OnUnitActiveSec=10min        # Запуск каждые 10 минут после завершения
+AccuracySec=1min
+```
 
-# Каждый час
+**Вариант 2: По расписанию**
+
+Запуск в конкретное время:
+
+```ini
+[Timer]
+# Каждый час в :00
 OnCalendar=hourly
 
-# Каждые 30 минут
+# Каждые 30 минут (:00 и :30)
 OnCalendar=*:0/30
 
-# Каждые 15 минут
-OnCalendar=*:0/15
+# Каждые 10 минут
+OnCalendar=*:0/10
 
-# Каждые 2 часа
-OnCalendar=0/2:00
+# Ежедневно в полночь
+OnCalendar=*-*-* 00:00:00
 
-# В конкретное время (9:00, 12:00, 15:00, 18:00)
-OnCalendar=*-*-* 09,12,15,18:00:00
-
-# Каждые 6 часов начиная с 00:00
-OnCalendar=0/6:00
+# Каждый понедельник в 9:00
+OnCalendar=Mon *-*-* 09:00:00
 ```
+
+**После изменений:**
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart speedtest-monitor.timer
+systemctl list-timers speedtest-monitor.timer
+```
+
+**Проверка синтаксиса расписания:**
+
+```bash
+systemd-analyze calendar "hourly"
+systemd-analyze calendar "*:0/10"
+```
+
+**Документация:**
+- `man systemd.timer`
+- https://www.freedesktop.org/software/systemd/man/systemd.timer.html
 
 После изменений:
 ```bash

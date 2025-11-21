@@ -6,8 +6,8 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-User=speedtest
-Group=speedtest
+User=root
+Group=root
 WorkingDirectory=/opt/speedtest-monitor
 ExecStart=/opt/speedtest-monitor/.venv/bin/python -m speedtest_monitor.main
 
