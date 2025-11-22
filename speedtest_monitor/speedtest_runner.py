@@ -103,6 +103,11 @@ class SpeedtestRunner:
 
         return commands
 
+    def _strip_ansi(self, text: str) -> str:
+        """Remove ANSI escape sequences from text."""
+        ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+        return ansi_escape.sub("", text)
+
     def _parse_speedtest_output(
         self, output: str, command: str
     ) -> Optional[SpeedtestResult]:
@@ -123,6 +128,9 @@ class SpeedtestRunner:
             Parsed result or None if parsing failed
         """
         try:
+            # Strip ANSI codes first
+            output = self._strip_ansi(output)
+
             # Try JSON format first (official speedtest with --format=json)
             if output.strip().startswith("{"):
                 try:
@@ -169,6 +177,8 @@ class SpeedtestRunner:
                     continue
 
                 # Match download speed (various formats)
+                # Matches: "Download: 123.45 Mbps" or "Download: 123.45 Mbit/s"
+                # Also handles potential extra spaces or chars
                 download_match = re.search(
                     r"(?:Download|download):\s+([\d.]+)\s+(?:Mbit/s|Mbps)",
                     line,
@@ -196,6 +206,7 @@ class SpeedtestRunner:
                     result_data["ping"] = float(ping_match.group(1))
 
                 # Match server info
+                # Example: "Server: Some Server - Location (id = 1234)"
                 if "Server:" in line:
                     parts = line.split(":", 1)
                     if len(parts) >= 2:
@@ -219,7 +230,7 @@ class SpeedtestRunner:
                     success=True,
                 )
 
-            logger.warning("Could not extract download/upload speeds from output")
+            logger.warning(f"Could not extract download/upload speeds from output. Output sample: {output[:200]}...")
             return None
             
         except Exception as e:
