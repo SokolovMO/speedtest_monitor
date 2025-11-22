@@ -101,6 +101,15 @@ class SpeedtestRunner:
             except Exception:
                 pass
 
+        # Prioritize speedtest-cli over official speedtest if official is failing
+        # Move speedtest-cli commands to the front of the list
+        cli_commands = [cmd for cmd in commands if "speedtest-cli" in cmd]
+        official_commands = [cmd for cmd in commands if "speedtest-cli" not in cmd]
+        
+        # If we have both, try cli first as it seems more reliable on some servers
+        if cli_commands and official_commands:
+            return cli_commands + official_commands
+            
         return commands
 
     def _strip_ansi(self, text: str) -> str:
