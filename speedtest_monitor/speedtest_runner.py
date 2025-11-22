@@ -276,7 +276,11 @@ class SpeedtestRunner:
 
                     # Configure output format based on speedtest version
                     if "speedtest-cli" not in command:
-                        # Official Ookla speedtest: check if --format=json is supported
+                        # Official Ookla speedtest: always accept license and add options
+                        cmd.append("--accept-license")
+                        cmd.append("--accept-gdpr")
+                        
+                        # Check if --format=json is supported
                         # Some versions support JSON output, others only text format
                         try:
                             version_check = subprocess.run(
@@ -298,6 +302,7 @@ class SpeedtestRunner:
                         cmd.append("--simple")
 
                     # Execute command
+                    logger.debug(f"Executing command: {' '.join(cmd)}")
                     result = subprocess.run(
                         cmd,
                         capture_output=True,
@@ -315,11 +320,15 @@ class SpeedtestRunner:
                             return parsed
                         else:
                             logger.warning(f"Failed to parse speedtest output")
+                            if result.stderr:
+                                logger.debug(f"stderr: {result.stderr}")
                     else:
+                        error_output = result.stderr.strip() if result.stderr else "Unknown error"
                         logger.warning(
-                            f"Speedtest command failed with code {result.returncode}: {result.stderr}"
+                            f"Speedtest command failed with code {result.returncode}"
                         )
-                        last_error = result.stderr
+                        logger.warning(f"Error: {error_output}")
+                        last_error = error_output
 
                 except subprocess.TimeoutExpired:
                     logger.warning(f"Speedtest command timed out after {self.config.timeout}s")
