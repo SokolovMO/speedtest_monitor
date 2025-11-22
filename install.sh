@@ -209,13 +209,21 @@ install_uv() {
     log_info "Downloading and installing UV..."
     curl -LsSf https://astral.sh/uv/install.sh | sh
     
-    # Add to PATH for current session
-    export PATH="$HOME/.cargo/bin:$PATH"
+    # Add UV to PATH for current session
+    # UV can be installed to different locations depending on the environment
+    if [[ -f "$HOME/.local/bin/uv" ]]; then
+        export PATH="$HOME/.local/bin:$PATH"
+    elif [[ -f "$HOME/.cargo/bin/uv" ]]; then
+        export PATH="$HOME/.cargo/bin:$PATH"
+    fi
     
     if command -v uv &> /dev/null; then
         log_success "UV installed successfully"
+        log_info "UV installed to: $(command -v uv)"
     else
         log_error "Failed to install UV"
+        log_error "UV may have been installed but is not in PATH"
+        log_info "Try running: export PATH=\"\$HOME/.local/bin:\$PATH\" or source \$HOME/.local/bin/env"
         return 1
     fi
 }

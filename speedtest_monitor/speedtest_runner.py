@@ -274,11 +274,27 @@ class SpeedtestRunner:
                         else:
                             cmd.extend(["--server-id", str(self.config.servers[0])])
 
-                    # Try JSON output first for better parsing (official speedtest only)
+                    # Configure output format based on speedtest version
                     if "speedtest-cli" not in command:
-                        cmd.append("--format=json")
+                        # Official Ookla speedtest: check if --format=json is supported
+                        # Some versions support JSON output, others only text format
+                        try:
+                            version_check = subprocess.run(
+                                [command, "--version"],
+                                capture_output=True,
+                                text=True,
+                                timeout=5,
+                            )
+                            version_output = version_check.stdout + version_check.stderr
+                            # Versions with JSON support (typically 1.1.0+)
+                            if "1.1" in version_output or "1.2" in version_output or "2." in version_output:
+                                cmd.append("--format=json")
+                            # Other versions use default text output (parsed by regex)
+                        except Exception:
+                            # If version check fails, use default text output
+                            pass
                     else:
-                        # Use --simple for speedtest-cli for more structured output
+                        # speedtest-cli: use --simple for structured output
                         cmd.append("--simple")
 
                     # Execute command
