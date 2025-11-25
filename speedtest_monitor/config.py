@@ -7,8 +7,7 @@ Handles loading and validation of application configuration.
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
-
+from typing import Dict, List, Optional, Any
 import yaml
 from dotenv import load_dotenv
 
@@ -52,8 +51,6 @@ class TelegramConfig:
     check_interval: int = 3600
     send_always: bool = False
     format: str = "html"
-    
-
 
 
 @dataclass
@@ -67,6 +64,43 @@ class LoggingConfig:
 
 
 @dataclass
+class NodeMetaConfig:
+    """Metadata for a node in master configuration."""
+    flag: Optional[str] = None
+    display_name: Optional[str] = None
+
+
+@dataclass
+class TelegramTargetConfig:
+    """Per-chat configuration for master mode."""
+    chat_id: int
+    default_language: str = "en"
+    default_view_mode: str = "compact"
+
+
+@dataclass
+class MasterConfig:
+    """Configuration for master mode."""
+    listen_host: str = "0.0.0.0"
+    listen_port: int = 8080
+    api_token: str = ""
+    aggregation_interval_minutes: int = 60
+    node_timeout_minutes: int = 120
+    nodes_order: List[str] = field(default_factory=list)
+    nodes_meta: Dict[str, NodeMetaConfig] = field(default_factory=dict)
+    telegram_targets: List[TelegramTargetConfig] = field(default_factory=list)
+
+
+@dataclass
+class NodeConfig:
+    """Configuration for node mode."""
+    node_id: str = ""
+    description: str = ""
+    master_url: str = ""
+    api_token: str = ""
+
+
+@dataclass
 class Config:
     """Main application configuration."""
 
@@ -75,6 +109,9 @@ class Config:
     thresholds: ThresholdsConfig
     telegram: TelegramConfig
     logging: LoggingConfig
+    mode: str = "single"
+    master: Optional[MasterConfig] = None
+    node: Optional[NodeConfig] = None
 
 
 class ConfigurationError(Exception):
@@ -148,12 +185,47 @@ def load_config(config_path: Path) -> Config:
             format=telegram_yaml.get("format", "html"),
         )
 
+        # Parse Master configuration
+        master_config = None
+        if "master" in yaml_config:
+            m_data = yaml_config["master"]
+            
+            # Parse nodes_meta
+            nodes_meta = {}
+            for nid, meta in m_data.get("nodes_meta", {}).items():
+                nodes_meta[nid] = NodeMetaConfig(**meta)
+            
+            # Parse telegram_targets
+            telegram_targets = []
+            for target in m_data.get("telegram_targets", []):
+                telegram_targets.append(TelegramTargetConfig(**target))
+                
+            master_config = MasterConfig(
+                listen_host=m_data.get("listen_host", "0.0.0.0"),
+                listen_port=m_data.get("listen_port", 8080),
+                api_token=m_data.get("api_token", ""),
+                aggregation_interval_minutes=m_data.get("aggregation_interval_minutes", 60),
+                node_timeout_minutes=m_data.get("node_timeout_minutes", 120),
+                nodes_order=m_data.get("nodes_order", []),
+                nodes_meta=nodes_meta,
+                telegram_targets=telegram_targets,
+            )
+
+        # Parse Node configuration
+        node_config = None
+        if "node" in yaml_config:
+            n_data = yaml_config["node"]
+            node_config = NodeConfig(**n_data)
+
         return Config(
             server=server_config,
             speedtest=speedtest_config,
             thresholds=thresholds_config,
             telegram=telegram_config,
             logging=logging_config,
+            mode=yaml_config.get("mode", "single"),
+            master=master_config,
+            node=node_config,
         )
     except TypeError as e:
         raise ConfigurationError(f"Invalid configuration format: {e}")

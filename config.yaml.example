@@ -2,6 +2,13 @@
 # Speedtest Monitor Configuration
 # ============================================
 
+# Operation mode
+# Options: single, master, node
+# - single: Run speedtest and send notification directly (default)
+# - master: Collect results from nodes and send aggregated report
+# - node: Run speedtest and send results to master
+mode: single
+
 # Server identification
 # Use "auto" for automatic detection or set manually
 server:

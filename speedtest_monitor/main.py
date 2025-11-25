@@ -145,6 +145,48 @@ def determine_config_path(args_config=None):
     )
 
 
+def run_master(config, logger):
+    """
+    Run the application in master mode.
+    
+    Args:
+        config: Application configuration
+        logger: Logger instance
+    """
+    from speedtest_monitor.aggregator import Aggregator
+    from speedtest_monitor.api import APIServer
+
+    logger.info("Starting Master mode...")
+    
+    if not config.master:
+        logger.error("Master configuration is missing in config.yaml")
+        return
+
+    # Initialize Aggregator
+    aggregator = Aggregator(config)
+    logger.info("Aggregator initialized")
+
+    # Initialize and run API Server
+    api_server = APIServer(config, aggregator)
+    
+    try:
+        api_server.run()
+    except Exception as e:
+        logger.error(f"Master server failed: {e}")
+        raise
+
+
+def run_node(config, logger):
+    """
+    Run the application in node mode.
+    
+    Args:
+        config: Application configuration
+        logger: Logger instance
+    """
+    logger.info("Node mode is not implemented yet.")
+
+
 def main():
     """
     Main execution function.
@@ -192,14 +234,23 @@ def main():
         logger.info(f"Speedtest Monitor v{__version__} started")
         logger.info(f"Configuration: {config_path.absolute()}")
         logger.info(f"Log level: {log_level}")
+        logger.info(f"Mode: {config.mode}")
         logger.info("=" * 60)
         
         # Check for shutdown signal
         if _shutdown_requested:
             logger.info("Shutdown requested before speedtest execution")
             return 0
+
+        # Dispatch based on mode
+        if config.mode == "master":
+            run_master(config, logger)
+            return 0
+        elif config.mode == "node":
+            run_node(config, logger)
+            return 0
         
-        # Initialize components
+        # Initialize components (Single mode)
         runner = SpeedtestRunner(config.speedtest)
         notifier = TelegramNotifier(config)
         
