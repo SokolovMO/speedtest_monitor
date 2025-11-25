@@ -51,6 +51,21 @@ log_header() {
 }
 
 # Parse command line arguments
+COMMAND="install"
+INSTALL_MODE="single"
+
+# Check for command as first argument
+if [[ "$1" == "install" ]]; then
+    shift
+    if [[ "$1" == "single" || "$1" == "master" || "$1" == "node" ]]; then
+        INSTALL_MODE="$1"
+        shift
+    fi
+elif [[ "$1" == "uninstall" ]]; then
+    COMMAND="uninstall"
+    shift
+fi
+
 while [[ $# -gt 0 ]]; do
     case $1 in
         --auto)
@@ -66,13 +81,22 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --help|-h)
-            echo "Usage: $0 [OPTIONS]"
+            echo "Usage: $0 [COMMAND] [MODE] [OPTIONS]"
+            echo ""
+            echo "Commands:"
+            echo "  install [mode]    Install the application (default)"
+            echo "  uninstall         Remove the application and services"
+            echo ""
+            echo "Modes (for install):"
+            echo "  single            Standalone monitor (default)"
+            echo "  master            Central server (API + Aggregator)"
+            echo "  node              Reporting node"
             echo ""
             echo "Options:"
-            echo "  --auto         Run in automatic mode (no prompts)"
-            echo "  --no-systemd   Skip systemd setup, use cron instead"
-            echo "  --user USER    Install for specific user (default: current)"
-            echo "  --help, -h     Show this help message"
+            echo "  --auto            Run in automatic mode (no prompts)"
+            echo "  --no-systemd      Skip systemd setup"
+            echo "  --user USER       Install for specific user (default: current)"
+            echo "  --help, -h        Show this help message"
             exit 0
             ;;
         *)
@@ -249,17 +273,28 @@ setup_directory() {
     sudo mkdir -p "$INSTALL_DIR"
     sudo chown "$INSTALL_USER:$(id -gn $INSTALL_USER)" "$INSTALL_DIR"
     
+    
     # Copy project files
     log_info "Copying project files..."
-    cp -r speedtest_monitor "$INSTALL_DIR/"
-    cp -r systemd "$INSTALL_DIR/"
-    cp pyproject.toml "$INSTALL_DIR/"
-    cp config.yaml.example "$INSTALL_DIR/config.yaml"
-    cp .env.example "$INSTALL_DIR/.env"
+    sudo cp -r speedtest_monitor "$INSTALL_DIR/"
+    sudo cp -r systemd "$INSTALL_DIR/"
+    sudo cp pyproject.toml "$INSTALL_DIR/"
+    
+    # Only copy config if it doesn't exist
+    if [[ ! -f "$INSTALL_DIR/config.yaml" ]]; then
+        sudo cp config.yaml.example "$INSTALL_DIR/config.yaml"
+    fi
+    
+    if [[ ! -f "$INSTALL_DIR/.env" ]]; then
+        sudo cp .env.example "$INSTALL_DIR/.env"
+    fi
     
     if [[ -f README.md ]]; then
-        cp README.md "$INSTALL_DIR/"
+        sudo cp README.md "$INSTALL_DIR/"
     fi
+    
+    # Fix permissions
+    sudo chown -R "$INSTALL_USER:$(id -gn $INSTALL_USER)" "$INSTALL_DIR"
     
     log_success "Installation directory ready"
 }
@@ -374,36 +409,99 @@ setup_systemd() {
         return 0
     fi
     
-    log_header "Setting Up Systemd Service"
+    log_header "Setting Up Systemd Service ($INSTALL_MODE mode)"
     
-    # Copy service files from installation directory
-    sudo cp "$INSTALL_DIR/systemd/speedtest-monitor.service" /etc/systemd/system/
-    sudo cp "$INSTALL_DIR/systemd/speedtest-monitor.timer" /etc/systemd/system/
+    # Update service files with correct user/path
+    # We do this in the install dir before copying
+    local USER_GROUP=$(id -gn $INSTALL_USER)
     
-    # Update service file with correct user
-    if [[ $EUID -eq 0 ]]; then
-        # Running as root - use root user
-        sudo sed -i.bak "s/User=root/User=root/" /etc/systemd/system/speedtest-monitor.service
-        sudo sed -i.bak "s/Group=root/Group=root/" /etc/systemd/system/speedtest-monitor.service
-    else
-        # Running with sudo - use current user
-        sudo sed -i.bak "s/User=root/User=$INSTALL_USER/" /etc/systemd/system/speedtest-monitor.service
-        sudo sed -i.bak "s/Group=root/Group=$(id -gn $INSTALL_USER)/" /etc/systemd/system/speedtest-monitor.service
+    for service_file in "$INSTALL_DIR/systemd/"*.service "$INSTALL_DIR/systemd/"*.timer; do
+        if [[ -f "$service_file" ]]; then
+            # Update User/Group
+            sed -i "s/User=root/User=$INSTALL_USER/" "$service_file"
+            sed -i "s/Group=root/Group=$USER_GROUP/" "$service_file"
+            # Update WorkingDirectory and ExecStart paths if needed (assuming they are standard in the file)
+            # The provided service files likely assume /opt/speedtest-monitor. 
+            # If INSTALL_DIR is different, we should update it.
+            sed -i "s|/opt/speedtest-monitor|$INSTALL_DIR|g" "$service_file"
+        fi
+    done
+
+    if [[ "$INSTALL_MODE" == "master" ]]; then
+        # Install Master Service
+        log_info "Installing Master service..."
+        sudo cp "$INSTALL_DIR/systemd/speedtest-master.service" /etc/systemd/system/
+        
+        sudo systemctl daemon-reload
+        sudo systemctl enable speedtest-master.service
+        sudo systemctl start speedtest-master.service
+        
+        log_success "Master service configured and started"
+        log_info "Check status: sudo systemctl status speedtest-master.service"
+        
+    elif [[ "$INSTALL_MODE" == "node" || "$INSTALL_MODE" == "single" ]]; then
+        # Install Monitor Service & Timer
+        log_info "Installing Monitor service and timer..."
+        sudo cp "$INSTALL_DIR/systemd/speedtest-monitor.service" /etc/systemd/system/
+        sudo cp "$INSTALL_DIR/systemd/speedtest-monitor.timer" /etc/systemd/system/
+        
+        sudo systemctl daemon-reload
+        sudo systemctl enable speedtest-monitor.timer
+        sudo systemctl start speedtest-monitor.timer
+        
+        log_success "Monitor timer configured and started"
+        log_info "Check status: sudo systemctl status speedtest-monitor.timer"
     fi
-    sudo rm -f /etc/systemd/system/speedtest-monitor.service.bak
-    
-    # Reload systemd
-    sudo systemctl daemon-reload
-    
-    # Enable and start timer
-    sudo systemctl enable speedtest-monitor.timer
-    sudo systemctl start speedtest-monitor.timer
-    
-    log_success "Systemd service configured and started"
-    log_info "Service will run hourly"
-    log_info "Check status: sudo systemctl status speedtest-monitor.timer"
-    log_info "View logs: sudo journalctl -u speedtest-monitor.service -f"
 }
+
+# Uninstall function
+do_uninstall() {
+    log_header "Uninstalling Speedtest Monitor"
+    
+    # Stop and disable services
+    if command -v systemctl &> /dev/null; then
+        log_info "Stopping and disabling services..."
+        sudo systemctl stop speedtest-master.service 2>/dev/null || true
+        sudo systemctl disable speedtest-master.service 2>/dev/null || true
+        
+        sudo systemctl stop speedtest-monitor.timer 2>/dev/null || true
+        sudo systemctl disable speedtest-monitor.timer 2>/dev/null || true
+        
+        sudo systemctl stop speedtest-monitor.service 2>/dev/null || true
+        
+        # Remove unit files
+        log_info "Removing systemd unit files..."
+        sudo rm -f /etc/systemd/system/speedtest-master.service
+        sudo rm -f /etc/systemd/system/speedtest-monitor.service
+        sudo rm -f /etc/systemd/system/speedtest-monitor.timer
+        
+        sudo systemctl daemon-reload
+    else
+        log_warning "Systemd not found, skipping service removal."
+        # Try to remove cron job
+        log_info "Checking for cron jobs..."
+        crontab -l 2>/dev/null | grep -v "speedtest_monitor" | crontab - 2>/dev/null || true
+    fi
+    
+    # Remove installation directory
+    if [[ -d "$INSTALL_DIR" ]]; then
+        echo ""
+        read -p "Remove installation directory ($INSTALL_DIR) and logs? (y/N): " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            log_info "Removing $INSTALL_DIR..."
+            sudo rm -rf "$INSTALL_DIR"
+            log_success "Directory removed."
+        else
+            log_info "Directory kept."
+        fi
+    else
+        log_warning "Installation directory not found: $INSTALL_DIR"
+    fi
+    
+    log_success "Uninstallation complete."
+}
+
 
 # Setup cron job (fallback)
 setup_cron() {

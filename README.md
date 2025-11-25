@@ -34,23 +34,35 @@
 # 1. Clone repository
 git clone https://github.com/SokolovMO/speedtest_monitor.git
 cd speedtest_monitor
-
-# 2. Run automated installation (UV installs automatically)
 chmod +x install.sh
-./install.sh
 
-# 3. Configure
-cp config.yaml.example config.yaml
-nano config.yaml  # Set mode: single, master, or node
+# 2. Install in desired mode
+# For Single Server (Standalone):
+./install.sh install single
+
+# For Master Server (Central Aggregator):
+./install.sh install master
+
+# For Node (Reporting Agent):
+./install.sh install node
 ```
 
 ### 🏗️ Architecture Modes
 
 The application supports three operation modes:
 
-1.  **Single Mode** (Default): Runs a speedtest and sends a notification directly to Telegram. Best for simple setups.
-2.  **Master Mode**: Acts as a central server. Receives reports from nodes via HTTP API, aggregates them, and sends a combined report to Telegram periodically.
-3.  **Node Mode**: Runs a speedtest and sends the result to the Master server via HTTP API.
+1. **Single Mode** (Default): Runs a speedtest and sends a notification directly to Telegram. Best for simple setups.
+2. **Master Mode**: Acts as a central server. Receives reports from nodes via HTTP API, aggregates them, and sends a combined report to Telegram periodically.
+3. **Node Mode**: Runs a speedtest and sends the result to the Master server via HTTP API.
+
+### 🔐 Security Note
+
+For Master/Node communication, you need to generate a secure `api_key`. It must be identical on the Master and all Nodes.
+Generate one using:
+
+```bash
+openssl rand -hex 32
+```
 
 ### 🛠️ Requirements
 
@@ -63,6 +75,54 @@ The application supports three operation modes:
 ---
 
 ## 📖 Documentation
+
+### 📥 Installation Guide
+
+#### 1. Master Server Installation
+
+The Master server collects data from all nodes and sends Telegram notifications.
+
+1. Run `./install.sh install master`
+2. Edit `config.yaml`:
+   - Set `mode: master`
+   - Configure `master` section: `host`, `port`, `api_key`
+   - Configure `telegram` section (token, chat_id)
+3. Restart service: `sudo systemctl restart speedtest-master`
+
+#### 2. Node Installation
+
+Nodes run speedtests and send results to the Master.
+
+1. Run `./install.sh install node`
+2. Edit `config.yaml`:
+   - Set `mode: node`
+   - Configure `node` section: `master_url` (e.g., `http://MASTER_IP:8080`), `api_key` (same as Master)
+3. Restart timer: `sudo systemctl restart speedtest-monitor.timer`
+
+#### 3. Migration from Single to Master/Node
+
+If you are already running in Single mode and want to switch to Master/Node:
+
+1. **On the main server (to become Master):**
+   - Run `./install.sh install master`
+   - Update `config.yaml` to `mode: master` and add `master` config.
+   - Disable the old timer: `sudo systemctl disable --now speedtest-monitor.timer`
+   - Enable the master service: `sudo systemctl enable --now speedtest-master`
+
+2. **On other servers (to become Nodes):**
+   - Run `./install.sh install node`
+   - Update `config.yaml` to `mode: node` and add `node` config.
+   - Ensure `api_key` matches the Master.
+
+#### 4. Uninstallation
+
+To remove the application and all services:
+
+```bash
+./install.sh uninstall
+```
+
+This will stop services, remove systemd units, and optionally delete the project directory.
 
 ### 🚀 Quick Start Guide (Read in Order)
 
