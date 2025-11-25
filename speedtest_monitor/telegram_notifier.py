@@ -9,10 +9,18 @@ import time
 from datetime import datetime
 from typing import Optional
 
-from aiogram import Bot
+from aiogram import Bot, Dispatcher, F
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramAPIError
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
+from speedtest_monitor.chat_prefs import (
+    ChatPreferences,
+    ensure_default_preferences,
+    get_chat_preferences,
+    set_chat_language,
+    set_chat_view_mode,
+)
 from .config import Config, ServerConfig, ThresholdsConfig
 from .constants import (
     MAX_MESSAGE_LENGTH,
@@ -34,18 +42,111 @@ class TelegramNotifier:
     Handles message formatting, status determination, and error handling.
     """
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, aggregator=None):
         """
         Initialize Telegram notifier.
 
         Args:
             config: Application configuration
+            aggregator: Optional Aggregator instance (needed for callbacks to re-render reports)
         """
         self.config = config
+        self.aggregator = aggregator
+        self.dp = Dispatcher()
+        self._setup_handlers()
+        
         # Cache server info on initialization to avoid repeated lookups
         self._server_name = None
         self._server_location = None
         self._server_identifier = None
+
+    def _setup_handlers(self):
+        """Register Telegram handlers."""
+        self.dp.callback_query.register(self._handle_callback, F.data.startswith("pref:"))
+
+    def _get_keyboard(self, current_lang: str, current_view: str) -> InlineKeyboardMarkup:
+        """Generate inline keyboard for settings."""
+        # Language buttons
+        lang_ru = "✅ 🌐 ru" if current_lang == "ru" else "🌐 ru"
+        lang_en = "✅ 🌐 en" if current_lang == "en" else "🌐 en"
+        
+        # View mode buttons
+        view_compact = "✅ 📄 compact" if current_view == "compact" else "📄 compact"
+        view_detailed = "✅ 📋 detailed" if current_view == "detailed" else "📋 detailed"
+        
+        keyboard = [
+            [
+                InlineKeyboardButton(text=lang_ru, callback_data="pref:lang:ru"),
+                InlineKeyboardButton(text=lang_en, callback_data="pref:lang:en"),
+            ],
+            [
+                InlineKeyboardButton(text=view_compact, callback_data="pref:view:compact"),
+                InlineKeyboardButton(text=view_detailed, callback_data="pref:view:detailed"),
+            ]
+        ]
+        return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+    async def _handle_callback(self, callback: CallbackQuery):
+        """Handle preference change callbacks."""
+        try:
+            if not callback.data or not callback.message:
+                return
+
+            # data format: pref:type:value
+            parts = callback.data.split(":")
+            if len(parts) != 3:
+                return
+                
+            _, pref_type, value = parts
+            chat_id = callback.message.chat.id
+            
+            if pref_type == "lang":
+                set_chat_language(chat_id, value)
+            elif pref_type == "view":
+                set_chat_view_mode(chat_id, value)
+            
+            # Re-render report if aggregator is available
+            if self.aggregator:
+                prefs = get_chat_preferences(chat_id)
+                if prefs:
+                    from speedtest_monitor.view_renderer import render_compact, render_detailed
+                    
+                    report = self.aggregator.build_report()
+                    if prefs.view_mode == "detailed":
+                        text = render_detailed(report, prefs.language)
+                    else:
+                        text = render_compact(report, prefs.language)
+                    
+                    keyboard = self._get_keyboard(prefs.language, prefs.view_mode)
+                    
+                    # Edit message
+                    # Check if message is accessible (it should be for callbacks)
+                    if hasattr(callback.message, "edit_text"):
+                        await callback.message.edit_text(
+                            text=text,
+                            reply_markup=keyboard,
+                            parse_mode=ParseMode.HTML
+                        )
+            
+            await callback.answer("Preferences updated")
+            
+        except Exception as e:
+            logger.error(f"Error handling callback: {e}")
+            await callback.answer("Error updating preferences")
+
+    async def start_polling(self):
+        """Start Telegram bot polling."""
+        if not self.config.telegram.bot_token:
+            return
+            
+        bot = Bot(token=self.config.telegram.bot_token)
+        logger.info("Starting Telegram bot polling...")
+        try:
+            await self.dp.start_polling(bot)
+        except Exception as e:
+            logger.error(f"Polling error: {e}")
+        finally:
+            await bot.session.close()
 
     def _get_server_name(self) -> str:
         """Get server name (auto-detect if needed, cached)."""
@@ -302,4 +403,63 @@ class TelegramNotifier:
         except Exception as e:
             logger.error(f"Error in sync wrapper: {e}")
             return False
+
+    async def send_aggregated_report(self, report) -> bool:
+        """
+        Send aggregated report to all master targets.
+        
+        Args:
+            report: AggregatedReport object
+            
+        Returns:
+            True if at least one message sent successfully
+        """
+        if not self.config.master or not self.config.master.telegram_targets:
+            logger.warning("No telegram targets configured for master mode")
+            return False
+
+        from speedtest_monitor.view_renderer import render_compact, render_detailed
+
+        async with Bot(token=self.config.telegram.bot_token) as bot:
+            success_count = 0
+            targets = self.config.master.telegram_targets
+            
+            for target in targets:
+                # Ensure preferences exist
+                defaults = ChatPreferences(
+                    chat_id=target.chat_id,
+                    language=target.default_language,
+                    view_mode=target.default_view_mode,
+                    created_at=datetime.now(),
+                    updated_at=datetime.now()
+                )
+                prefs = ensure_default_preferences(target.chat_id, defaults)
+                
+                # Render message
+                if prefs.view_mode == "detailed":
+                    message = render_detailed(report, prefs.language)
+                else:
+                    message = render_compact(report, prefs.language)
+                
+                keyboard = self._get_keyboard(prefs.language, prefs.view_mode)
+                
+                # Send message with keyboard
+                try:
+                    await bot.send_message(
+                        chat_id=target.chat_id,
+                        text=message,
+                        parse_mode=ParseMode.HTML,
+                        reply_markup=keyboard
+                    )
+                    success_count += 1
+                    logger.info(f"Message sent successfully to {target.chat_id}")
+                except Exception as e:
+                    logger.error(f"Error sending to {target.chat_id}: {e}")
+            
+            if success_count > 0:
+                logger.info(f"Aggregated report sent to {success_count}/{len(targets)} recipients")
+                return True
+            else:
+                logger.error("Failed to send aggregated report to any recipient")
+                return False
 

@@ -5,9 +5,11 @@ Runs a single speedtest check and sends results to Telegram.
 """
 
 import argparse
+import asyncio
 import os
 import signal
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from speedtest_monitor import (
@@ -18,10 +20,15 @@ from speedtest_monitor import (
     setup_logger,
     validate_config,
 )
+from speedtest_monitor.aggregator import Aggregator
+from speedtest_monitor.api import APIServer
 from speedtest_monitor.constants import (
     DEFAULT_CONFIG_PATH,
     DEFAULT_LOG_LEVEL,
 )
+from speedtest_monitor.models import SpeedtestResult as ModelSpeedtestResult
+from speedtest_monitor.node_client import send_result_to_master
+from speedtest_monitor.utils import get_system_info
 
 # Version information
 __version__ = "1.0.0"
@@ -153,9 +160,6 @@ def run_master(config, logger):
         config: Application configuration
         logger: Logger instance
     """
-    from speedtest_monitor.aggregator import Aggregator
-    from speedtest_monitor.api import APIServer
-
     logger.info("Starting Master mode...")
     
     if not config.master:
@@ -165,9 +169,12 @@ def run_master(config, logger):
     # Initialize Aggregator
     aggregator = Aggregator(config)
     logger.info("Aggregator initialized")
+    
+    # Initialize Notifier
+    notifier = TelegramNotifier(config, aggregator=aggregator)
 
     # Initialize and run API Server
-    api_server = APIServer(config, aggregator)
+    api_server = APIServer(config, aggregator, notifier)
     
     try:
         api_server.run()
@@ -184,7 +191,57 @@ def run_node(config, logger):
         config: Application configuration
         logger: Logger instance
     """
-    logger.info("Node mode is not implemented yet.")
+    logger.info(f"Starting Node mode (ID: {config.node.node_id})...")
+    
+    if not config.node or not config.node.node_id:
+        logger.error("Node ID is not configured")
+        return
+
+    # 1. Run Speedtest
+    logger.info("Running speedtest...")
+    runner = SpeedtestRunner(config.speedtest)
+    runner_result = runner.run()
+    
+    # 2. Prepare data
+    sys_info = get_system_info()
+    os_info = f"{sys_info['os']} {sys_info['os_version']}"
+    
+    # Determine status
+    status = "failed"
+    if runner_result.success:
+        dl = runner_result.download_mbps
+        if dl >= config.thresholds.good:
+            status = "excellent"
+        elif dl >= config.thresholds.medium:
+            status = "good"
+        elif dl >= config.thresholds.low:
+            status = "degraded"
+        else:
+            status = "degraded"
+    else:
+        status = "failed"
+
+    # 3. Create Model Object
+    model_result = ModelSpeedtestResult(
+        node_id=config.node.node_id,
+        timestamp=datetime.now(),
+        download_mbps=runner_result.download_mbps,
+        upload_mbps=runner_result.upload_mbps,
+        ping_ms=runner_result.ping_ms,
+        status=status,
+        test_server=f"{runner_result.server_name} ({runner_result.server_location})",
+        isp=runner_result.isp,
+        os_info=os_info
+    )
+    
+    # 4. Send to Master
+    logger.info("Sending result to master...")
+    success = asyncio.run(send_result_to_master(model_result, config))
+    
+    if success:
+        logger.info("Node cycle completed successfully")
+    else:
+        logger.warning("Node cycle completed with errors (failed to send report)")
 
 
 def main():

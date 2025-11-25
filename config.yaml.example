@@ -9,6 +9,69 @@
 # - node: Run speedtest and send results to master
 mode: single
 
+# ============================================
+# Master Mode Configuration
+# ============================================
+master:
+  listen_host: "0.0.0.0"
+  listen_port: 8080
+  api_token: "CHANGE_ME_MASTER_TOKEN"
+  
+  # How often to send aggregated reports to Telegram (minutes)
+  aggregation_interval_minutes: 60
+  
+  # Time after which a node is considered offline (minutes)
+  node_timeout_minutes: 120
+
+  # Order of nodes in the report
+  nodes_order:
+    - fin
+    - lv
+    - ger
+    - nl
+    - us
+    - kz
+
+  # Metadata for nodes (flags, display names)
+  nodes_meta:
+    fin:
+      flag: "🇫🇮"
+      display_name: "Finland my.deephost.pw"
+    lv:
+      flag: "🇱🇻"
+      display_name: "Latvia app.ml.cloud"
+    ger:
+      flag: "🇩🇪"
+      display_name: "Germany my.qwins.co"
+    nl:
+      flag: "🇳🇱"
+      display_name: "Netherlands 62yun.ru"
+    us:
+      flag: "🇺🇸"
+      display_name: "USA my.deephost.pw"
+    kz:
+      flag: "🇰🇿"
+      display_name: "Kazakhstan my.adminvps.ru"
+
+  # Telegram recipients for aggregated reports
+  telegram_targets:
+    - chat_id: 123456789
+      default_language: "ru"      # ru | en
+      default_view_mode: "detailed" # compact | detailed
+
+# ============================================
+# Node Mode Configuration
+# ============================================
+node:
+  node_id: "fin"  # Must match key in master's nodes_meta
+  description: "Finland Node"
+  master_url: "http://YOUR_MASTER_IP:8080/api/v1/report"
+  api_token: "CHANGE_ME_MASTER_TOKEN"
+
+# ============================================
+# Single Mode / Common Configuration
+# ============================================
+
 # Server identification
 # Use "auto" for automatic detection or set manually
 server:

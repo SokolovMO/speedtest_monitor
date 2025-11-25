@@ -1,0 +1,15 @@
+[Unit]
+Description=Speedtest Monitor Master Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/speedtest-monitor
+Environment="CONFIG_PATH=/opt/speedtest-monitor/config.yaml"
+ExecStart=/opt/speedtest-monitor/.venv/bin/python -m speedtest_monitor.main
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

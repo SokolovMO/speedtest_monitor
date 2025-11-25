@@ -16,7 +16,7 @@
 
 - **🔄 Automatic Monitoring** - Scheduled speed tests with intelligent retry logic
 - **📱 Telegram Integration** - Real-time notifications with formatted bilingual reports
-- **🖥️ Multi-Server Support** - Monitor multiple servers with centralized reporting
+- **🖥️ Multi-Server Support** - Monitor multiple servers with centralized reporting (Master + Nodes architecture)
 - **🎯 Smart Thresholds** - Configurable speed thresholds with visual status indicators
 - **🔍 Auto-Detection** - Automatic server identification and speedtest command discovery
 - **📊 Detailed Reporting** - Full statistics: speed, ping, ISP, server location, OS info
@@ -25,6 +25,8 @@
 - **🔧 Easy Deployment** - Automated installation with systemd/cron integration
 - **📝 Production Logging** - Log rotation with configurable verbosity
 - **🛡️ Robust Error Handling** - Retry logic, graceful degradation, JSON/text parsing
+- **🌐 Localization** - Bilingual reports (EN/RU) with per-chat preferences
+- **📱 Interactive UI** - Inline buttons to switch language and view mode (Compact/Detailed)
 
 ### 📦 Quick Start
 
@@ -37,13 +39,18 @@ cd speedtest_monitor
 chmod +x install.sh
 ./install.sh
 
-# 3. Configure (if not done during installation)
-cp .env.example .env
-nano .env  # Add Telegram bot token and chat ID
-
-# 4. Test run
-uv run python -m speedtest_monitor.main
+# 3. Configure
+cp config.yaml.example config.yaml
+nano config.yaml  # Set mode: single, master, or node
 ```
+
+### 🏗️ Architecture Modes
+
+The application supports three operation modes:
+
+1.  **Single Mode** (Default): Runs a speedtest and sends a notification directly to Telegram. Best for simple setups.
+2.  **Master Mode**: Acts as a central server. Receives reports from nodes via HTTP API, aggregates them, and sends a combined report to Telegram periodically.
+3.  **Node Mode**: Runs a speedtest and sends the result to the Master server via HTTP API.
 
 ### 🛠️ Requirements
 
@@ -68,7 +75,7 @@ uv run python -m speedtest_monitor.main
 
 ## 🏗️ Project Structure
 
-```
+```text
 speedtest-monitor/
 ├── 📄 .python-version          # Python 3.9
 ├── 📦 pyproject.toml           # UV configuration
@@ -81,26 +88,21 @@ speedtest-monitor/
 ├── 📁 speedtest_monitor/       # Main code
 │   ├── main.py                 # Entry point
 │   ├── config.py               # Configuration loader
-│   ├── constants.py            # Constants
-│   ├── logger.py               # Logging
-│   ├── speedtest_runner.py     # Test execution
-│   ├── telegram_notifier.py    # Notifications
-│   └── utils.py                # Utilities
+│   ├── aggregator.py           # Master: Aggregation logic
+│   ├── api.py                  # Master: HTTP API
+│   ├── node_client.py          # Node: HTTP Client
+│   ├── chat_prefs.py           # Master: Chat preferences (SQLite)
+│   ├── localization.py         # Translations
+│   ├── view_renderer.py        # Message formatting
+│   ├── models.py               # Data models
+│   ├── ...
 │
 ├── 📁 systemd/                 # Linux auto-start
 │   ├── speedtest-monitor.service
-│   └── speedtest-monitor.timer
-│
-├── 📁 docs/                    # Documentation
-│   ├── installation.md         # Installation
-│   ├── configuration.md        # Configuration
-│   ├── scheduling-guide.md     # Scheduling
-│   └── deployment.md           # Deployment
+│   ├── speedtest-monitor.timer
+│   └── speedtest-master.service # Master service
 │
 └── 📁 tests/                   # Tests
-    ├── test_config.py
-    ├── test_speedtest_runner.py
-    └── test_telegram_notifier.py
 ```
 
 ### ⚡ Why UV?
@@ -115,7 +117,7 @@ This project uses [UV](https://github.com/astral-sh/uv) - a modern, ultra-fast P
 
 ### 📊 Telegram Notification Example
 
-```
+```text
 📊 Internet Speed Report / Отчет о скорости интернета
 
 🖥 Server / Сервер: web-server-01 (New York, USA)
