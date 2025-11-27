@@ -15,7 +15,10 @@ mode: single
 master:
   listen_host: "0.0.0.0"
   listen_port: 8080
-  api_token: "CHANGE_ME_MASTER_TOKEN"
+  
+  # Shared secret token. MUST be the same on Master and all Nodes.
+  # Generate with: openssl rand -hex 32
+  api_token: "CHANGE_ME_SHARED_SECRET_TOKEN"
   
   # How often to send aggregated reports to Telegram (minutes)
   aggregation_interval_minutes: 60
@@ -23,7 +26,7 @@ master:
   # Time after which a node is considered offline (minutes)
   node_timeout_minutes: 120
 
-  # Order of nodes in the report
+  # Order of nodes in the report (determines sorting)
   nodes_order:
     - fin
     - lv
@@ -33,6 +36,7 @@ master:
     - kz
 
   # Metadata for nodes (flags, display names)
+  # Keys (fin, lv, etc.) must match 'node_id' in Node configs
   nodes_meta:
     fin:
       flag: "🇫🇮"
@@ -65,8 +69,16 @@ master:
 node:
   node_id: "fin"  # Must match key in master's nodes_meta
   description: "Finland Node"
+  
+  # URL to reach the Master API
+  # Examples:
+  # - Public IP: http://1.2.3.4:8080/api/v1/report
+  # - Domain:    http://monitor.example.com:8080/api/v1/report
+  # - Local LAN: http://192.168.1.100:8080/api/v1/report
   master_url: "http://YOUR_MASTER_IP:8080/api/v1/report"
-  api_token: "CHANGE_ME_MASTER_TOKEN"
+  
+  # Shared secret token. MUST match the one in Master config.
+  api_token: "CHANGE_ME_SHARED_SECRET_TOKEN"
 
 # ============================================
 # Single Mode / Common Configuration

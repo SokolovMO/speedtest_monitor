@@ -4,7 +4,7 @@
 
 Speedtest Monitor uses two configuration files:
 - **`.env`** - Sensitive credentials (Telegram bot token)
-- **`config.yaml`** - Application settings (thresholds, servers, logging)
+- **`config.yaml`** - Application settings (thresholds, servers, logging, master/node setup)
 
 This approach follows security best practices by separating credentials from configuration.
 
@@ -25,11 +25,104 @@ TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz
 |-----------|-------------|----------|---------|
 | `TELEGRAM_BOT_TOKEN` | Bot token from @BotFather | Yes | `1234567890:ABC...` |
 
-**Note:** `TELEGRAM_CHAT_ID` is no longer used in `.env`. All recipient IDs (chat_ids, user_ids) are configured in `config.yaml`.
-
 ### config.yaml File
 
 Main configuration file with all application settings.
+
+## 🏗️ Master / Node Architecture Setup
+
+This section explains how to configure the distributed monitoring system.
+
+### 1. Concepts
+
+- **Master**: The central server. It exposes an HTTP API to receive reports from Nodes. It aggregates these reports and sends a single summary to Telegram.
+- **Node**: A server that runs speedtests and sends the results to the Master via HTTP.
+- **API Token**: A shared secret key used to secure communication between Nodes and Master. **It must be the same on all servers.**
+
+### 2. Generating an API Token
+
+You need one secure token for your entire cluster. Generate it once and copy it to all config files.
+
+```bash
+# Generate a secure random token
+openssl rand -hex 32
+# Example output: 8f4b2e1d9c3a...
+```
+
+### 3. Master Configuration
+
+On the server designated as **Master**:
+
+1. Set `mode: master`.
+2. Configure the `master` section.
+3. Define your nodes in `nodes_meta` (this maps Node IDs to display names and flags).
+
+```yaml
+mode: master
+
+master:
+  listen_host: "0.0.0.0"  # Listen on all interfaces
+  listen_port: 8080       # Port to open
+  api_token: "YOUR_GENERATED_TOKEN_HERE" # Must match Node's token
+  
+  # How often to send the summary to Telegram (minutes)
+  aggregation_interval_minutes: 60
+  
+  # List of Node IDs to include in the report (determines sort order)
+  nodes_order:
+    - usa_node
+    - eu_node
+
+  # Display details for each node
+  nodes_meta:
+    usa_node:
+      flag: "🇺🇸"
+      display_name: "New York Server"
+    eu_node:
+      flag: "🇩🇪"
+      display_name: "Berlin Server"
+
+  # Telegram recipients for the aggregated report
+  telegram_targets:
+    - chat_id: 123456789
+      default_language: "en"
+      default_view_mode: "detailed"
+```
+
+### 4. Node Configuration
+
+On each **Node** server:
+
+1. Set `mode: node`.
+2. Configure the `node` section.
+3. **Important**: `node_id` must match the key used in the Master's `nodes_meta`.
+
+```yaml
+mode: node
+
+node:
+  node_id: "usa_node"     # Must match key in Master's nodes_meta
+  description: "DigitalOcean Droplet NYC"
+  
+  # URL to reach the Master. 
+  # If Master has public IP 1.2.3.4: http://1.2.3.4:8080/api/v1/report
+  # If on same LAN: http://192.168.1.10:8080/api/v1/report
+  master_url: "http://YOUR_MASTER_IP:8080/api/v1/report"
+  
+  api_token: "YOUR_GENERATED_TOKEN_HERE" # Must match Master's token
+```
+
+### 5. Network Requirements
+
+- **Master**: Must have port `8080` (or your chosen port) open in the firewall (`ufw allow 8080/tcp`).
+- **Nodes**: Must be able to reach the Master's IP on that port.
+- **NAT/Internet**: If Nodes are on different networks (e.g., different VPS providers), the Master needs a Public IP or a Domain Name.
+
+---
+
+## Standard Configuration (Single Mode)
+
+Below is the reference for the standard configuration parts used in Single mode or by the Node to run the test.
 
 ```yaml
 # Server identification
