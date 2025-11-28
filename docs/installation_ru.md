@@ -44,43 +44,78 @@
 
 ## Быстрая установка
 
-### Автоматическая установка (Рекомендуется)
+### Интерактивная установка (Рекомендуется)
+
+Установщик теперь поддерживает интерактивную настройку для всех режимов.
+
+#### 1. Установка Master-сервера
 
 ```bash
 # 1. Клонируйте репозиторий
 git clone https://github.com/SokolovMO/speedtest_monitor.git
 cd speedtest_monitor
-
-# 2. Сделайте установщик исполняемым
 chmod +x install.sh
 
-# 3. Запустите установщик
-./install.sh
+# 2. Запустите установщик в режиме master
+./install.sh install master
 
-# Установщик автоматически:
-# - Проверит системные требования
-# - Установит UV менеджер пакетов
-# - Создаст виртуальное окружение
-# - Установит все зависимости с помощью uv sync
-# - Настроит systemd timer (опционально)
-# - Настроит cron задание (альтернатива)
+# 3. Следуйте подсказкам:
+# - Введите токен Telegram бота и Chat ID
+# - Введите/Сгенерируйте API Token
+# - Установите интервал отчетов
+# - (Опционально) Установите локальную ноду для мониторинга скорости мастера
+```
+
+#### 2. Установка Node (Узла)
+
+```bash
+# 1. Клонируйте репозиторий (на сервере-ноде)
+git clone https://github.com/SokolovMO/speedtest_monitor.git
+cd speedtest_monitor
+chmod +x install.sh
+
+# 2. Запустите установщик в режиме node
+./install.sh install node
+
+# 3. Следуйте подсказкам:
+# - Введите Node ID (например, "us-east")
+# - Введите URL Мастера (например, "http://1.2.3.4:8080/api/v1/report")
+# - Введите API Token (должен совпадать с токеном Мастера)
+```
+
+#### 3. Single Mode (Одиночный режим)
+
+```bash
+./install.sh install single
+# Следуйте подсказкам для настройки Telegram
 ```
 
 ### Опции установки
 
 ```bash
-# Автоматический режим (без запросов)
-./install.sh --auto
+# Автоматический режим (без запросов - требует ручной правки конфига)
+./install.sh install master --auto
 
 # Пропустить systemd, использовать только cron
-./install.sh --no-systemd
+./install.sh install single --no-systemd
 
 # Установить для конкретного пользователя
-./install.sh --user myuser
+./install.sh install master --user myuser
 
 # Показать справку
 ./install.sh --help
 ```
+
+### Локальная нода на Master
+
+При установке Master-сервера вам будет предложено установить **Локальную ноду**.
+Это полезно, если вы хотите, чтобы Master-сервер также выполнял тесты скорости и отправлял отчеты самому себе.
+
+- **Конфиг**: `config-master-node.yaml`
+- **Сервис**: `speedtest-master-node.service`
+- **Таймер**: `speedtest-master-node.timer`
+
+Эта нода работает независимо от процесса агрегатора Master и отправляет результаты на `http://localhost:8080/api/v1/report`.
 
 ---
 
@@ -165,45 +200,42 @@ brew install speedtest-cli
 
 ## Проверка
 
-### Тестирование установки
+### 1. Проверка сервиса Master
 
 ```bash
-# 1. Запустите один speedtest
+# Проверить статус
+sudo systemctl status speedtest-master
+
+# Проверить логи на наличие входящих отчетов
+sudo journalctl -u speedtest-master -f
+# Ищите: "Received report from node..."
+```
+
+### 2. Проверка сервиса Node
+
+```bash
+# Проверить статус
+sudo systemctl status speedtest-monitor.timer
+
+# Проверить логи на наличие отправленных отчетов
+sudo journalctl -u speedtest-monitor -f
+# Ищите: "Successfully sent report to master..."
+```
+
+### 3. Проверка локальной ноды (если установлена)
+
+```bash
+sudo systemctl status speedtest-master-node.timer
+```
+
+### Тестирование установки (Ручной запуск)
+
+```bash
+# Запустить одиночный speedtest (использует config.yaml)
 uv run python -m speedtest_monitor.main
 
-# 2. Проверьте логи
-tail -f speedtest.log
-
-# 3. Убедитесь, что уведомление в Telegram было отправлено
-```
-
-### Проверка настройки UV
-
-```bash
-# Проверьте версию UV
-uv --version
-
-# Список установленных пакетов
-uv pip list
-
-# Проверьте версию Python
-python --version
-
-# Проверьте зависимости
-uv pip check
-```
-
-### Проверка команд Speedtest
-
-```bash
-# Тест speedtest-cli
-speedtest-cli --version
-
-# Тест официального speedtest
-speedtest --version
-
-# Запустите ручной speedtest
-speedtest --format=json
+# Запустить speedtest локальной ноды (использует config-master-node.yaml)
+CONFIG_PATH=config-master-node.yaml uv run python -m speedtest_monitor.main
 ```
 
 ---

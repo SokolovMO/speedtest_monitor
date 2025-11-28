@@ -123,6 +123,31 @@ If you have an existing Single server and want to convert it to a Master:
    - Run `./install.sh install node`
    - Follow the prompts to connect to your new Master.
 
+### 🤖 Auto Mode (Unattended Installation)
+
+For scripted deployments (Ansible, cloud-init, etc.), use the `--auto` flag to skip all interactive prompts:
+
+```bash
+./install.sh install master --auto
+# or
+./install.sh install node --auto
+```
+
+**Note:** In auto mode, the installer will **not** configure `config.yaml` or `.env`. You must provision these files manually or use a configuration management tool to overwrite them after installation.
+
+### 📊 Cluster Architecture
+
+```text
+[ Node 1 (US) ] ──┐
+                  │
+[ Node 2 (DE) ] ──┼──> [ Master Server ] ──> [ Telegram Bot ]
+                  │      (Aggregator)
+[ Node 3 (FI) ] ──┘           ^
+                              │
+[ Local Node ] ───────────────┘
+(Optional, on Master)
+```
+
 ### ✅ Verification
 
 To verify the Master installation:
@@ -145,21 +170,6 @@ To verify the Master installation:
    curl http://localhost:8080/health
    # Should return: {"status": "ok", "mode": "master", ...}
    ```
-
-#### 3. Migration from Single to Master/Node
-
-If you are already running in Single mode and want to switch to Master/Node:
-
-1. **On the main server (to become Master):**
-   - Run `./install.sh install master`
-   - Update `config.yaml` to `mode: master` and add `master` config.
-   - Disable the old timer: `sudo systemctl disable --now speedtest-monitor.timer`
-   - Enable the master service: `sudo systemctl enable --now speedtest-master`
-
-2. **On other servers (to become Nodes):**
-   - Run `./install.sh install node`
-   - Update `config.yaml` to `mode: node` and add `node` config.
-   - Ensure `api_key` matches the Master.
 
 #### 4. Uninstallation
 

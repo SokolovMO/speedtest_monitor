@@ -44,43 +44,78 @@ The installation script will automatically install these, but you can install th
 
 ## Quick Installation
 
-### Automated Installation (Recommended)
+### Interactive Installation (Recommended)
+
+The installer now supports interactive configuration for all modes.
+
+#### 1. Master Server Installation
 
 ```bash
 # 1. Clone repository
 git clone https://github.com/SokolovMO/speedtest_monitor.git
 cd speedtest_monitor
-
-# 2. Make installer executable
 chmod +x install.sh
 
-# 3. Run installer
-./install.sh
+# 2. Run installer in master mode
+./install.sh install master
 
-# The installer will:
-# - Check system requirements
-# - Install UV package manager
-# - Create virtual environment
-# - Install all dependencies with uv sync
-# - Configure systemd timer (optional)
-# - Set up cron job (alternative)
+# 3. Follow the prompts:
+# - Enter Telegram Bot Token & Chat ID
+# - Enter/Generate API Token
+# - Set report interval
+# - (Optional) Install Local Node to monitor master's speed
+```
+
+#### 2. Node Installation
+
+```bash
+# 1. Clone repository (on the node server)
+git clone https://github.com/SokolovMO/speedtest_monitor.git
+cd speedtest_monitor
+chmod +x install.sh
+
+# 2. Run installer in node mode
+./install.sh install node
+
+# 3. Follow the prompts:
+# - Enter Node ID (e.g., "us-east")
+# - Enter Master URL (e.g., "http://1.2.3.4:8080/api/v1/report")
+# - Enter API Token (must match Master's token)
+```
+
+#### 3. Single Mode (Standalone)
+
+```bash
+./install.sh install single
+# Follow prompts for Telegram configuration
 ```
 
 ### Installation Options
 
 ```bash
-# Auto mode (no prompts)
-./install.sh --auto
+# Auto mode (no prompts - requires manual config editing)
+./install.sh install master --auto
 
 # Skip systemd, use cron only
-./install.sh --no-systemd
+./install.sh install single --no-systemd
 
 # Install for specific user
-./install.sh --user myuser
+./install.sh install master --user myuser
 
 # Show help
 ./install.sh --help
 ```
+
+### Local Node on Master
+
+When installing the Master server, you will be asked if you want to install a **Local Node**.
+This is useful if you want the Master server to also perform speed tests and report them to itself.
+
+- **Config**: `config-master-node.yaml`
+- **Service**: `speedtest-master-node.service`
+- **Timer**: `speedtest-master-node.timer`
+
+This node runs independently of the Master aggregator process and sends results to `http://localhost:8080/api/v1/report`.
 
 ---
 
@@ -167,45 +202,42 @@ brew install speedtest-cli
 
 ## Verification
 
-### Test Installation
+### 1. Verify Master Service
 
 ```bash
-# 1. Run single speedtest
+# Check status
+sudo systemctl status speedtest-master
+
+# Check logs for incoming reports
+sudo journalctl -u speedtest-master -f
+# Look for: "Received report from node..."
+```
+
+### 2. Verify Node Service
+
+```bash
+# Check status
+sudo systemctl status speedtest-monitor.timer
+
+# Check logs for sent reports
+sudo journalctl -u speedtest-monitor -f
+# Look for: "Successfully sent report to master..."
+```
+
+### 3. Verify Local Node (if installed)
+
+```bash
+sudo systemctl status speedtest-master-node.timer
+```
+
+### Test Installation (Manual Run)
+
+```bash
+# Run single speedtest (uses config.yaml)
 uv run python -m speedtest_monitor.main
 
-# 2. Check logs
-tail -f speedtest.log
-
-# 3. Verify Telegram notification was sent
-```
-
-### Verify UV Setup
-
-```bash
-# Check UV version
-uv --version
-
-# List installed packages
-uv pip list
-
-# Check Python version
-python --version
-
-# Verify dependencies
-uv pip check
-```
-
-### Check Speedtest Commands
-
-```bash
-# Test speedtest-cli
-speedtest-cli --version
-
-# Test official speedtest
-speedtest --version
-
-# Run manual speedtest
-speedtest --format=json
+# Run local node speedtest (uses config-master-node.yaml)
+CONFIG_PATH=config-master-node.yaml uv run python -m speedtest_monitor.main
 ```
 
 ---

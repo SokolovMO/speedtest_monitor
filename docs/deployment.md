@@ -18,123 +18,79 @@ Before deployment, complete:
 
 ## 📦 Quick Deployment
 
-### Option 1: Systemd Timer (Recommended for Linux)
+The easiest way to deploy is using the included `install.sh` script, which handles systemd service creation and configuration automatically.
 
 ```bash
-# 1. Copy systemd files
-sudo cp systemd/speedtest-monitor.service /etc/systemd/system/
-sudo cp systemd/speedtest-monitor.timer /etc/systemd/system/
+# Master
+./install.sh install master
 
-# 2. Update paths in service file
-sudo nano /etc/systemd/system/speedtest-monitor.service
-# Edit: WorkingDirectory, ExecStart paths
+# Node
+./install.sh install node
 
-# 3. Enable and start
-sudo systemctl daemon-reload
-sudo systemctl enable speedtest-monitor.timer
-sudo systemctl start speedtest-monitor.timer
-
-# 4. Verify
-sudo systemctl status speedtest-monitor.timer
-systemctl list-timers speedtest-monitor.timer
+# Single
+./install.sh install single
 ```
 
-### Option 2: Cron (Cross-platform)
+### Systemd Services Reference
 
-```bash
-# Edit crontab
-crontab -e
+The installer creates the following units based on the selected mode:
 
-# Add line (runs every hour):
-0 * * * * cd /opt/speedtest-monitor && /opt/speedtest-monitor/.venv/bin/python -m speedtest_monitor.main >> /opt/speedtest-monitor/cron.log 2>&1
-
-# Verify
-crontab -l
-```
+| Mode | Unit File | Description |
+|------|-----------|-------------|
+| **Master** | `speedtest-master.service` | The main aggregator service (runs continuously). |
+| **Node** | `speedtest-monitor.timer` | Triggers the speedtest execution periodically. |
+| **Node** | `speedtest-monitor.service` | The actual speedtest execution unit. |
+| **Local Node** | `speedtest-master-node.timer` | Triggers local speedtest on Master. |
+| **Local Node** | `speedtest-master-node.service` | Execution unit for local node. |
 
 ---
 
-## 🌐 Multi-Server Deployment
+## 🌐 Multi-Server Deployment (Master/Node Architecture)
 
 ### Architecture
 
 ```
-Server 1 (web-01)  ┐
-Server 2 (db-01)   ├─→ Same Telegram Bot → Multiple Recipients
-Server 3 (cache-01)┘
+[ Node 1 (US) ] ──┐
+                  │
+[ Node 2 (DE) ] ──┼──> [ Master Server ] ──> [ Telegram Bot ]
+                  │      (Aggregator)
+[ Node 3 (FI) ] ──┘
 ```
 
 **Key Points:**
-- ✅ One bot token for all servers
-- ✅ Each server has unique `server.name` in `config.yaml`
-- ✅ Same `chat_ids` and `user_ids` receive reports from all servers
-- ✅ No conflicts - Telegram API handles concurrency
+- ✅ **Master**: Central point of contact. Needs open port (default 8080).
+- ✅ **Nodes**: Run speedtests and push data to Master. No incoming ports needed.
+- ✅ **Telegram**: Only the Master communicates with Telegram API.
 
 ### Step-by-Step
 
-**1. Configure First Server**
+**1. Deploy Master**
 
 ```bash
-# Server 1
-cd speedtest_monitor
-./install.sh
-
-# Edit config
-nano config.yaml
+# On Master Server
+./install.sh install master
+# Configure API Token, Port, etc.
 ```
 
-```yaml
-server:
-  name: "web-server-01"
-  description: "Production Web Server"
-
-telegram:
-  chat_ids:
-    - "123456789"  # Admin group
-  check_interval: 3600  # 1 hour
-```
-
-**2. Deploy to Additional Servers**
+**2. Deploy Nodes**
 
 ```bash
-# Server 2, 3, etc.
-git clone https://github.com/SokolovMO/speedtest_monitor.git
-cd speedtest_monitor
-./install.sh
-
-# Use SAME bot token in .env
-# Change server.name in config.yaml
+# On Node Servers
+./install.sh install node
+# Configure Node ID, Master URL, API Token
 ```
 
-```yaml
-# Server 2
-server:
-  name: "db-server-01"
-  description: "Primary Database"
-  
-# Server 3
-server:
-  name: "cache-server-01"
-  description: "Redis Cache"
+**3. Verify Connectivity**
+
+Check Master logs to see incoming reports:
+
+```bash
+sudo journalctl -u speedtest-master -f
 ```
 
-**3. Distribute Check Intervals**
+---
 
-Avoid all servers running simultaneously:
-
-```yaml
-# Server 1: On the hour
-telegram:
-  check_interval: 3600
-
-# Server 2: +5 minutes
-telegram:
-  check_interval: 3600  # But set systemd OnCalendar=*:05
-
-# Server 3: +10 minutes
-telegram:
-  check_interval: 3600  # But set systemd OnCalendar=*:10
-```
+## 🔧 Production Configuration
 
 ---
 

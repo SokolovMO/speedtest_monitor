@@ -53,6 +53,18 @@ master:
 | `interval_minutes` | Как часто отправлять агрегированный отчет в Telegram. |
 | `send_immediately` | Если `true`, отправляет отчет *каждый раз* при обновлении данных узла (может спамить). Если `false`, агрегирует и отправляет раз в интервал. |
 
+### 3. Локальная нода на Master (Внешний таймер)
+
+Если вы установили локальную ноду на мастере, у нее есть свой собственный таймер.
+
+**Настройка:**
+Редактировать `/etc/systemd/system/speedtest-master-node.timer`:
+```ini
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=60min
+```
+
 ---
 
 ## 🔧 Конфигурация Systemd
@@ -82,6 +94,23 @@ OnCalendar=hourly
 Type=simple
 Restart=always
 ExecStart=/opt/speedtest-monitor/.venv/bin/python -m speedtest_monitor.main
+```
+
+### Локальная нода на Master
+Использует **Service + Timer** (Отдельно от Master).
+
+**speedtest-master-node.service**:
+```ini
+[Service]
+Type=simple
+Environment="CONFIG_PATH=/opt/speedtest-monitor/config-master-node.yaml"
+ExecStart=/opt/speedtest-monitor/.venv/bin/python -m speedtest_monitor.main
+```
+
+**speedtest-master-node.timer**:
+```ini
+[Timer]
+OnUnitActiveSec=60min
 ```
 
 ---

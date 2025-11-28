@@ -53,6 +53,18 @@ master:
 | `interval_minutes` | How often to send the aggregated report to Telegram. |
 | `send_immediately` | If `true`, sends a report *every time* a node updates (can be spammy). If `false`, aggregates and sends once per interval. |
 
+### 3. Local Node on Master (External Timer)
+
+If you installed a local node on the master server, it has its own timer.
+
+**Configuration:**
+Edit `/etc/systemd/system/speedtest-master-node.timer`:
+```ini
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=60min
+```
+
 ---
 
 ## 🔧 Systemd Configuration
@@ -82,6 +94,23 @@ Uses **Service Only** (Daemon).
 Type=simple
 Restart=always
 ExecStart=/opt/speedtest-monitor/.venv/bin/python -m speedtest_monitor.main
+```
+
+### Local Node on Master
+Uses **Service + Timer** (Separate from Master).
+
+**speedtest-master-node.service**:
+```ini
+[Service]
+Type=simple
+Environment="CONFIG_PATH=/opt/speedtest-monitor/config-master-node.yaml"
+ExecStart=/opt/speedtest-monitor/.venv/bin/python -m speedtest_monitor.main
+```
+
+**speedtest-master-node.timer**:
+```ini
+[Timer]
+OnUnitActiveSec=60min
 ```
 
 ---

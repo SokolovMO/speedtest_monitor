@@ -118,7 +118,35 @@ node:
   api_token: "YOUR_GENERATED_TOKEN_HERE" # Must match Master's token
 ```
 
-### 5. Network Requirements
+### 5. Local Node on Master (Optional)
+
+If you want the Master server to also perform speed tests and report them to itself, you need a separate configuration file (e.g., `config-master-node.yaml`).
+
+This file is identical to a standard Node configuration but points to `localhost`.
+
+**File: `config-master-node.yaml`**
+
+```yaml
+mode: node
+
+node:
+  node_id: "master_node"  # Must match an entry in Master's nodes_meta
+  description: "Master Server Local Node"
+  
+  # Connect to localhost
+  master_url: "http://127.0.0.1:8080/api/v1/report"
+  
+  # Same token as in config.yaml
+  api_token: "YOUR_GENERATED_TOKEN_HERE"
+
+# Standard speedtest settings...
+speedtest:
+  timeout: 60
+  retry_count: 3
+  # ...
+```
+
+### 6. Network Requirements
 
 - **Master**: Must have port `8080` (or your chosen port) open in the firewall (`ufw allow 8080/tcp`).
 - **Nodes**: Must be able to reach the Master's IP on that port.
