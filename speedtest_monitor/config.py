@@ -79,16 +79,25 @@ class TelegramTargetConfig:
 
 
 @dataclass
+class MasterScheduleConfig:
+    """Scheduling configuration for master mode."""
+    interval_minutes: int = 60
+    send_immediately: bool = False
+
+
+@dataclass
 class MasterConfig:
     """Configuration for master mode."""
     listen_host: str = "0.0.0.0"
     listen_port: int = 8080
     api_token: str = ""
+    # Deprecated: use schedule.interval_minutes instead
     aggregation_interval_minutes: int = 60
     node_timeout_minutes: int = 120
     nodes_order: List[str] = field(default_factory=list)
     nodes_meta: Dict[str, NodeMetaConfig] = field(default_factory=dict)
     telegram_targets: List[TelegramTargetConfig] = field(default_factory=list)
+    schedule: MasterScheduleConfig = field(default_factory=MasterScheduleConfig)
 
 
 @dataclass
@@ -199,6 +208,18 @@ def load_config(config_path: Path) -> Config:
             telegram_targets = []
             for target in m_data.get("telegram_targets", []):
                 telegram_targets.append(TelegramTargetConfig(**target))
+            
+            # Parse schedule
+            schedule_data = m_data.get("schedule", {})
+            # Backward compatibility: if schedule is missing, use aggregation_interval_minutes
+            # and default send_immediately to True (as per user request for old behavior)
+            if "schedule" not in m_data:
+                schedule_config = MasterScheduleConfig(
+                    interval_minutes=m_data.get("aggregation_interval_minutes", 60),
+                    send_immediately=True
+                )
+            else:
+                schedule_config = MasterScheduleConfig(**schedule_data)
                 
             master_config = MasterConfig(
                 listen_host=m_data.get("listen_host", "0.0.0.0"),
@@ -209,6 +230,7 @@ def load_config(config_path: Path) -> Config:
                 nodes_order=m_data.get("nodes_order", []),
                 nodes_meta=nodes_meta,
                 telegram_targets=telegram_targets,
+                schedule=schedule_config,
             )
 
         # Parse Node configuration

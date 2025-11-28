@@ -4,32 +4,89 @@
 
 ### Where to configure frequency?
 
-1. **In config.yaml** - specify desired interval:
-   ```yaml
-   telegram:
-     check_interval: 3600  # seconds
-   ```
+The configuration depends on the mode:
 
-2. **In systemd timer OR cron** - configure matching schedule
+1.  **Single / Node Mode**:
+    -   Frequency is controlled by **Systemd Timer** (external).
+    -   `config.yaml` settings are for reference or thresholds.
 
-⚠️ **Important:** Values must match!
-
----
-
-## 📊 Correspondence Table
-
-| Interval | config.yaml | systemd timer | cron |
-|----------|-------------|---------------|------|
-| **15 minutes** | `check_interval: 900` | `OnCalendar=*:0/15` | `*/15 * * * *` |
-| **30 minutes** | `check_interval: 1800` | `OnCalendar=*:0/30` | `*/30 * * * *` |
-| **1 hour** | `check_interval: 3600` | `OnCalendar=hourly` | `0 * * * *` |
-| **2 hours** | `check_interval: 7200` | `OnCalendar=0/2:00` | `0 */2 * * *` |
-| **6 hours** | `check_interval: 21600` | `OnCalendar=0/6:00` | `0 */6 * * *` |
-| **12 hours** | `check_interval: 43200` | `OnCalendar=0/12:00` | `0 */12 * * *` |
+2.  **Master Mode**:
+    -   Frequency is controlled by **Internal Scheduler** (`config.yaml`).
+    -   Systemd runs as a continuous service (`speedtest-master.service`).
 
 ---
 
-## 🔧 Systemd Timer (Recommended)
+## 📊 Scheduling by Mode
+
+### 1. Single & Node Mode (External Timer)
+
+In these modes, the Python script runs once, performs the test, and exits. Systemd Timer triggers it periodically.
+
+| Interval | systemd timer (`speedtest-monitor.timer`) |
+|----------|-------------------------------------------|
+| **15 min** | `OnCalendar=*:0/15` |
+| **1 hour** | `OnCalendar=hourly` |
+| **4 hours** | `OnCalendar=0/4:00` |
+
+**Configuration:**
+Edit `/etc/systemd/system/speedtest-monitor.timer`:
+```ini
+[Timer]
+OnCalendar=hourly
+```
+
+### 2. Master Mode (Internal Scheduler)
+
+In Master mode, the service runs continuously (`Type=simple`). It collects reports from nodes and sends aggregated summaries based on `config.yaml`.
+
+**Configuration:**
+Edit `config.yaml`:
+```yaml
+master:
+  schedule:
+    interval_minutes: 60      # Send report every 60 minutes
+    send_immediately: false   # Wait for interval (don't spam)
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `interval_minutes` | How often to send the aggregated report to Telegram. |
+| `send_immediately` | If `true`, sends a report *every time* a node updates (can be spammy). If `false`, aggregates and sends once per interval. |
+
+---
+
+## 🔧 Systemd Configuration
+
+### Node / Single Mode
+Uses **Service + Timer**.
+
+**speedtest-monitor.service**:
+```ini
+[Service]
+Type=oneshot
+ExecStart=/opt/speedtest-monitor/.venv/bin/python -m speedtest_monitor.main
+```
+
+**speedtest-monitor.timer**:
+```ini
+[Timer]
+OnCalendar=hourly
+```
+
+### Master Mode
+Uses **Service Only** (Daemon).
+
+**speedtest-master.service**:
+```ini
+[Service]
+Type=simple
+Restart=always
+ExecStart=/opt/speedtest-monitor/.venv/bin/python -m speedtest_monitor.main
+```
+
+---
+
+## 🔧 Systemd Timer (Legacy / Single Mode)
 
 ### How it works
 

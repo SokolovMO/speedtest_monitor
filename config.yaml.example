@@ -20,8 +20,16 @@ master:
   # Generate with: openssl rand -hex 32
   api_token: "CHANGE_ME_SHARED_SECRET_TOKEN"
   
-  # How often to send aggregated reports to Telegram (minutes)
-  aggregation_interval_minutes: 60
+  # Scheduling configuration
+  schedule:
+    # Minimum interval between aggregated reports (minutes)
+    # If send_immediately is false, reports will be sent at this interval.
+    interval_minutes: 60
+    
+    # If true: Send a report immediately every time a node sends a result.
+    # If false: Aggregate results and send once per interval_minutes.
+    # Recommended: false (to avoid spam)
+    send_immediately: false
   
   # Time after which a node is considered offline (minutes)
   node_timeout_minutes: 120

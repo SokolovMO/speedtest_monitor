@@ -65,8 +65,14 @@ master:
   listen_port: 8080       # Port to open
   api_token: "YOUR_GENERATED_TOKEN_HERE" # Must match Node's token
   
-  # How often to send the summary to Telegram (minutes)
-  aggregation_interval_minutes: 60
+  # Scheduling configuration
+  schedule:
+    # Minimum interval between aggregated reports (minutes)
+    interval_minutes: 60
+    
+    # If true: Send a report immediately every time a node sends a result.
+    # If false: Aggregate results and send once per interval_minutes.
+    send_immediately: false
   
   # List of Node IDs to include in the report (determines sort order)
   nodes_order:

@@ -85,7 +85,8 @@ The Master server collects data from all nodes and sends Telegram notifications.
 1. Run `./install.sh install master`
 2. Edit `config.yaml`:
    - Set `mode: master`
-   - Configure `master` section: `host`, `port`, `api_key`
+   - Configure `master` section: `listen_host`, `listen_port`, `api_token`
+   - Configure `master.schedule`: `interval_minutes` (e.g. 60) and `send_immediately` (false)
    - Configure `telegram` section (token, chat_id)
 3. Restart service: `sudo systemctl restart speedtest-master`
 
@@ -96,8 +97,41 @@ Nodes run speedtests and send results to the Master.
 1. Run `./install.sh install node`
 2. Edit `config.yaml`:
    - Set `mode: node`
-   - Configure `node` section: `master_url` (e.g., `http://MASTER_IP:8080`), `api_key` (same as Master)
+   - Configure `node` section: `master_url` (e.g., `http://MASTER_IP:8080/api/v1/report`), `api_token` (same as Master)
 3. Restart timer: `sudo systemctl restart speedtest-monitor.timer`
+
+### 🔄 Migration Guide (Single -> Master/Node)
+
+If you have an existing Single server and want to convert it to a Master:
+
+1. **On the Master Server:**
+   - Disable the old timer: `sudo systemctl disable --now speedtest-monitor.timer`
+   - Run `./install.sh install master`
+   - Update `config.yaml` (set `mode: master`, configure `master` section)
+   - Start the master service: `sudo systemctl enable --now speedtest-master`
+
+2. **On Node Servers:**
+   - Run `./install.sh install node`
+   - Update `config.yaml` (set `mode: node`, configure `node` section)
+   - Enable the timer: `sudo systemctl enable --now speedtest-monitor.timer`
+
+### ✅ Verification
+
+To verify the Master installation:
+
+1. Check service status:
+   ```bash
+   sudo systemctl status speedtest-master
+   ```
+2. Check logs:
+   ```bash
+   sudo journalctl -u speedtest-master -n 50 --no-pager
+   ```
+3. Test Health Endpoint:
+   ```bash
+   curl http://localhost:8080/health
+   # Should return: {"status": "ok", "mode": "master", ...}
+   ```
 
 #### 3. Migration from Single to Master/Node
 

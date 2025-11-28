@@ -47,11 +47,27 @@ class APIServer:
     def setup_routes(self):
         """Define API routes."""
         self.app.router.add_post("/api/v1/report", self.handle_report)
+        self.app.router.add_get("/health", self.health_check)
+
+    async def health_check(self, request: web.Request) -> web.Response:
+        """
+        Health check endpoint.
+        Returns status and current mode.
+        """
+        return web.json_response({
+            "status": "ok",
+            "mode": "master",
+            "version": "1.0.0"  # Ideally import __version__ from main or init
+        })
 
     async def start_background_tasks(self, app):
         """Start background tasks on app startup."""
-        self.scheduler_task = asyncio.create_task(self.scheduler_loop())
-        logger.info("Scheduler task started")
+        # Only start scheduler if NOT sending immediately
+        if self.config.master and not self.config.master.schedule.send_immediately:
+            self.scheduler_task = asyncio.create_task(self.scheduler_loop())
+            logger.info("Scheduler task started")
+        else:
+            logger.info("Scheduler task skipped (send_immediately=True)")
         
         # Start Telegram polling
         self.polling_task = asyncio.create_task(self.notifier.start_polling())
@@ -82,8 +98,16 @@ class APIServer:
         if not self.config.master:
             return
 
-        interval = self.config.master.aggregation_interval_minutes * 60
-        logger.info(f"Scheduler started. Interval: {self.config.master.aggregation_interval_minutes} minutes")
+        # Use schedule.interval_minutes
+        interval_minutes = self.config.master.schedule.interval_minutes
+        interval = interval_minutes * 60
+        
+        logger.info(f"Scheduler started. Interval: {interval_minutes} minutes")
+        
+        # Log configuration
+        logger.info(f"Mode: master")
+        logger.info(f"Send immediately: {self.config.master.schedule.send_immediately}")
+        logger.info(f"Interval: {interval_minutes} minutes")
 
         while True:
             try:
@@ -151,6 +175,17 @@ class APIServer:
             # 4. Update Aggregator
             self.aggregator.update_node_result(result)
             logger.info(f"Received report from node '{result.node_id}'")
+            
+            # 5. Send immediately if configured
+            if self.config.master.schedule.send_immediately:
+                logger.info("Sending immediate aggregated report...")
+                report = self.aggregator.build_report()
+                # Fire and forget (or await? handle_report is async)
+                # We should await it to ensure it's sent, but it might slow down the response to the node.
+                # Since this is "immediate", awaiting is fine.
+                asyncio.create_task(self.notifier.send_aggregated_report(report))
+            else:
+                logger.debug("Report queued for next aggregation cycle")
 
             return web.Response(text="OK")
 
