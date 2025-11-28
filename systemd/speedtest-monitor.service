@@ -22,7 +22,8 @@ SyslogIdentifier=speedtest-monitor
 # Security hardening
 PrivateTmp=true
 NoNewPrivileges=true
-ReadWritePaths=/opt/speedtest-monitor/speedtest.log
+# Allow writing to the installation directory (for logs)
+ReadWritePaths=/opt/speedtest-monitor
 
 # Restart policy
 Restart=on-failure
