@@ -55,10 +55,18 @@ The application supports three operation modes:
 2. **Master Mode**: Acts as a central server. Receives reports from nodes via HTTP API, aggregates them, and sends a combined report to Telegram periodically.
 3. **Node Mode**: Runs a speedtest and sends the result to the Master server via HTTP API.
 
+#### Local Node on Master (Optional)
+
+The Master server itself does not run speedtests by default. If you want to monitor the Master server's own connection speed, you can install a **Local Node** on the same machine.
+
+- This creates a separate config file (`config-master-node.yaml`) and systemd service (`speedtest-master-node`).
+- It reports to the Master via `localhost`.
+- It appears as a regular node in the aggregated report (e.g., "Master Server").
+
 ### 🔐 Security Note
 
-For Master/Node communication, you need to generate a secure `api_key`. It must be identical on the Master and all Nodes.
-Generate one using:
+For Master/Node communication, you need to generate a secure `api_token`. It must be identical on the Master and all Nodes.
+The installer will help you generate one, or you can use:
 
 ```bash
 openssl rand -hex 32
@@ -83,51 +91,56 @@ openssl rand -hex 32
 The Master server collects data from all nodes and sends Telegram notifications.
 
 1. Run `./install.sh install master`
-2. Edit `config.yaml`:
-   - Set `mode: master`
-   - Configure `master` section: `listen_host`, `listen_port`, `api_token`
-   - Configure `master.schedule`: `interval_minutes` (e.g. 60) and `send_immediately` (false)
-   - Configure `telegram` section (token, chat_id)
-3. Restart service: `sudo systemctl restart speedtest-master`
+2. Follow the interactive prompts to configure:
+   - Telegram Bot Token and Chat ID
+   - **API Token** (auto-generated or manual)
+   - Report interval and immediate sending preference
+   - **Optional:** Install a local node to monitor the master server's speed
+3. The installer will automatically update `config.yaml` and start the `speedtest-master` service.
 
 #### 2. Node Installation
 
 Nodes run speedtests and send results to the Master.
 
 1. Run `./install.sh install node`
-2. Edit `config.yaml`:
-   - Set `mode: node`
-   - Configure `node` section: `master_url` (e.g., `http://MASTER_IP:8080/api/v1/report`), `api_token` (same as Master)
-3. Restart timer: `sudo systemctl restart speedtest-monitor.timer`
+2. Follow the interactive prompts to configure:
+   - **Node ID** (must match an entry in Master's `nodes_meta`)
+   - **Master URL** (e.g., `http://MASTER_IP:8080/api/v1/report`)
+   - **API Token** (must match the Master's token)
+3. The installer will automatically update `config.yaml` and start the `speedtest-monitor` timer.
 
 ### 🔄 Migration Guide (Single -> Master/Node)
 
 If you have an existing Single server and want to convert it to a Master:
 
 1. **On the Master Server:**
-   - Disable the old timer: `sudo systemctl disable --now speedtest-monitor.timer`
    - Run `./install.sh install master`
-   - Update `config.yaml` (set `mode: master`, configure `master` section)
-   - Start the master service: `sudo systemctl enable --now speedtest-master`
+   - Follow the prompts to switch to Master mode.
+   - Optionally enable the "Local Node" feature if you still want to run speedtests on this server.
+   - The installer will handle service switching (disabling monitor timer, enabling master service).
 
 2. **On Node Servers:**
    - Run `./install.sh install node`
-   - Update `config.yaml` (set `mode: node`, configure `node` section)
-   - Enable the timer: `sudo systemctl enable --now speedtest-monitor.timer`
+   - Follow the prompts to connect to your new Master.
 
 ### ✅ Verification
 
 To verify the Master installation:
 
 1. Check service status:
+
    ```bash
    sudo systemctl status speedtest-master
    ```
+
 2. Check logs:
+
    ```bash
    sudo journalctl -u speedtest-master -n 50 --no-pager
    ```
+
 3. Test Health Endpoint:
+
    ```bash
    curl http://localhost:8080/health
    # Should return: {"status": "ok", "mode": "master", ...}

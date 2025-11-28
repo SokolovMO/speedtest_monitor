@@ -7,7 +7,7 @@ set -e
 # This script installs speedtest-monitor on a Linux/macOS/FreeBSD server
 # with automatic dependency resolution and systemd/cron configuration.
 #
-# Usage: ./install_new.sh [--auto] [--no-systemd] [--user USERNAME]
+# Usage: ./install.sh [install|uninstall] [single|master|node] [--auto] [--no-systemd] [--user USERNAME]
 # ============================================================================
 
 # Colors for output
@@ -314,6 +314,202 @@ setup_python_env() {
     log_success "Python environment ready"
 }
 
+# Helper to run sed with macOS compatibility
+run_sed() {
+    local pattern="$1"
+    local file="$2"
+    
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i '' "$pattern" "$file"
+    else
+        sed -i "$pattern" "$file"
+    fi
+}
+
+configure_master_settings() {
+    echo ""
+    echo "🔧 Master Server Configuration"
+    echo "────────────────────────────────────────"
+    
+    # Set mode to master
+    run_sed "s/^mode: .*/mode: master/" "$INSTALL_DIR/config.yaml"
+    
+    # API Token
+    echo "The API token is a shared secret used by nodes to authenticate with the master."
+    read -p "Enter shared API token for master and all nodes (leave empty to auto-generate): " API_TOKEN
+    
+    if [[ -z "$API_TOKEN" ]]; then
+        API_TOKEN=$(openssl rand -hex 32)
+        echo "Generated token: $API_TOKEN"
+    fi
+    
+    # Replace api_token in master section
+    # We use a slightly more complex sed to ensure we only replace the one in master section if possible,
+    # but since the file structure is simple, we can target the line.
+    # The example config has 'api_token: "CHANGE_ME_SHARED_SECRET_TOKEN"' under master:
+    run_sed "s/api_token: \"CHANGE_ME_SHARED_SECRET_TOKEN\"/api_token: \"$API_TOKEN\"/" "$INSTALL_DIR/config.yaml"
+    
+    # Schedule Interval
+    read -p "Enter master report interval in minutes (default 60): " INTERVAL
+    if [[ -n "$INTERVAL" && "$INTERVAL" =~ ^[0-9]+$ ]]; then
+        run_sed "s/interval_minutes: 60/interval_minutes: $INTERVAL/" "$INSTALL_DIR/config.yaml"
+    else
+        INTERVAL=60
+    fi
+    
+    # Send Immediately
+    read -p "Send report immediately on each node result? (y/N): " SEND_IMMEDIATELY
+    if [[ "$SEND_IMMEDIATELY" =~ ^[Yy]$ ]]; then
+        run_sed "s/send_immediately: false/send_immediately: true/" "$INSTALL_DIR/config.yaml"
+        SEND_IMMEDIATELY_VAL="true"
+    else
+        SEND_IMMEDIATELY_VAL="false"
+    fi
+    
+    # Node Timeout
+    read -p "Node timeout in minutes (default 120): " TIMEOUT
+    if [[ -n "$TIMEOUT" && "$TIMEOUT" =~ ^[0-9]+$ ]]; then
+        run_sed "s/node_timeout_minutes: 120/node_timeout_minutes: $TIMEOUT/" "$INSTALL_DIR/config.yaml"
+    fi
+    
+    echo ""
+    log_info "Master Configuration Summary:"
+    echo "  Mode: master"
+    echo "  API Token: $API_TOKEN"
+    echo "  Report Interval: $INTERVAL min"
+    echo "  Send Immediately: $SEND_IMMEDIATELY_VAL"
+    echo ""
+    echo "To edit master settings later, open: $INSTALL_DIR/config.yaml"
+    echo "After changing config, run:"
+    echo "  sudo systemctl daemon-reload"
+    echo "  sudo systemctl restart speedtest-master.service"
+}
+
+configure_node_settings() {
+    echo ""
+    echo "🔧 Node Configuration"
+    echo "────────────────────────────────────────"
+    
+    # Set mode to node
+    run_sed "s/^mode: .*/mode: node/" "$INSTALL_DIR/config.yaml"
+    
+    # Node ID
+    read -p "Enter node_id (must match key in master's nodes_meta, e.g. fin, lv, ger): " NODE_ID
+    if [[ -n "$NODE_ID" ]]; then
+        run_sed "s/node_id: \"fin\"/node_id: \"$NODE_ID\"/" "$INSTALL_DIR/config.yaml"
+    fi
+    
+    # Master URL
+    read -p "Enter Master URL (e.g. http://MASTER_IP:8080/api/v1/report): " MASTER_URL
+    if [[ -n "$MASTER_URL" ]]; then
+        # Escape slashes for sed
+        ESCAPED_URL=$(echo "$MASTER_URL" | sed 's/\//\\\//g')
+        run_sed "s/master_url: \"http:\/\/YOUR_MASTER_IP:8080\/api\/v1\/report\"/master_url: \"$ESCAPED_URL\"/" "$INSTALL_DIR/config.yaml"
+    fi
+    
+    # API Token
+    read -p "Enter shared API token (must be the same as on master): " API_TOKEN
+    if [[ -n "$API_TOKEN" ]]; then
+        run_sed "s/api_token: \"CHANGE_ME_SHARED_SECRET_TOKEN\"/api_token: \"$API_TOKEN\"/" "$INSTALL_DIR/config.yaml"
+    fi
+    
+    echo ""
+    log_info "Node Configuration Summary:"
+    echo "  Mode: node"
+    echo "  Node ID: $NODE_ID"
+    echo "  Master URL: $MASTER_URL"
+    echo ""
+    log_warning "Ensure API Token matches the Master's token!"
+    echo ""
+    echo "To edit node settings later, open: $INSTALL_DIR/config.yaml"
+    echo "After changing config, run:"
+    echo "  sudo systemctl daemon-reload"
+    echo "  sudo systemctl restart speedtest-monitor.service"
+}
+
+configure_local_master_node() {
+    echo ""
+    echo "🏠 Local Node on Master"
+    echo "────────────────────────────────────────"
+    read -p "Do you want to install a local node on this master to monitor its own speed? (y/N): " INSTALL_LOCAL
+    
+    if [[ "$INSTALL_LOCAL" =~ ^[Yy]$ ]]; then
+        log_info "Configuring local node..."
+        
+        local CONFIG_FILE="$INSTALL_DIR/config-master-node.yaml"
+        
+        # Copy existing config as base
+        sudo cp "$INSTALL_DIR/config.yaml" "$CONFIG_FILE"
+        
+        # Get API Token from master config
+        local API_TOKEN=$(grep "api_token:" "$INSTALL_DIR/config.yaml" | head -n 1 | awk -F'"' '{print $2}')
+        
+        # Update config for local node
+        run_sed "s/^mode: .*/mode: node/" "$CONFIG_FILE"
+        run_sed "s/node_id: .*/node_id: \"master_node\"/" "$CONFIG_FILE"
+        run_sed "s/description: .*/description: \"🇷🇺 Master Server (local node)\"/" "$CONFIG_FILE"
+        
+        # Set Master URL to localhost
+        local LOCAL_URL="http:\/\/127.0.0.1:8080\/api\/v1\/report"
+        run_sed "s/master_url: .*/master_url: \"$LOCAL_URL\"/" "$CONFIG_FILE"
+        
+        # Ensure API token is set (it should be copied, but let's be sure if it was replaced in master config)
+        # If the master config has the token set, it's already in the file we copied.
+        # But wait, in master config, the api_token is under `master:`. In node config, it is under `node:`.
+        # The `config.yaml.example` has `api_token` in both sections with placeholder.
+        # When we configured master, we replaced the one in `master:` section (hopefully).
+        # Let's explicitly set the one in `node:` section of the new file.
+        
+        run_sed "s/api_token: \"CHANGE_ME_SHARED_SECRET_TOKEN\"/api_token: \"$API_TOKEN\"/" "$CONFIG_FILE"
+        
+        # Create Systemd Service
+        cat << EOF | sudo tee "$INSTALL_DIR/systemd/speedtest-master-node.service" > /dev/null
+[Unit]
+Description=Speedtest Monitor Node on Master
+After=network.target
+
+[Service]
+Type=simple
+User=$INSTALL_USER
+Group=$(id -gn $INSTALL_USER)
+WorkingDirectory=$INSTALL_DIR
+Environment="CONFIG_PATH=$INSTALL_DIR/config-master-node.yaml"
+ExecStart=$INSTALL_DIR/.venv/bin/python -m speedtest_monitor.main
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+        # Create Systemd Timer
+        cat << EOF | sudo tee "$INSTALL_DIR/systemd/speedtest-master-node.timer" > /dev/null
+[Unit]
+Description=Speedtest Monitor Node on Master - Timer
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=60min
+Unit=speedtest-master-node.service
+
+[Install]
+WantedBy=timers.target
+EOF
+
+        log_success "Local node configuration created at $CONFIG_FILE"
+        
+        # Enable and start immediately
+        if [[ $NO_SYSTEMD == false ]] && command -v systemctl &> /dev/null; then
+            log_info "Enabling local node timer..."
+            sudo cp "$INSTALL_DIR/systemd/speedtest-master-node.service" /etc/systemd/system/
+            sudo cp "$INSTALL_DIR/systemd/speedtest-master-node.timer" /etc/systemd/system/
+            sudo systemctl daemon-reload
+            sudo systemctl enable --now speedtest-master-node.timer
+            log_success "Local node timer started"
+        fi
+    fi
+}
+
 # Configure application
 configure_app() {
     log_header "Configuring Application"
@@ -357,23 +553,21 @@ EOF
     log_success "Configuration saved to $INSTALL_DIR/.env"
     
     # Update config.yaml with chat_id
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS
-        sed -i '' "s/YOUR_CHAT_ID_HERE/$CHAT_ID/" config.yaml
-    else
-        # Linux
-        sed -i "s/YOUR_CHAT_ID_HERE/$CHAT_ID/" config.yaml
-    fi
+    run_sed "s/YOUR_CHAT_ID_HERE/$CHAT_ID/" "config.yaml"
     
     # Server description
     echo ""
     read -p "Enter server description (optional): " SERVER_DESC
     if [[ -n "$SERVER_DESC" ]]; then
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            sed -i '' "s/description: \".*\"/description: \"$SERVER_DESC\"/" config.yaml
-        else
-            sed -i "s/description: \".*\"/description: \"$SERVER_DESC\"/" config.yaml
-        fi
+        run_sed "s/description: \".*\"/description: \"$SERVER_DESC\"/" "config.yaml"
+    fi
+    
+    # Mode specific configuration
+    if [[ "$INSTALL_MODE" == "master" ]]; then
+        configure_master_settings
+        configure_local_master_node
+    elif [[ "$INSTALL_MODE" == "node" ]]; then
+        configure_node_settings
     fi
     
     log_success "Application configured"
@@ -418,12 +612,10 @@ setup_systemd() {
     for service_file in "$INSTALL_DIR/systemd/"*.service "$INSTALL_DIR/systemd/"*.timer; do
         if [[ -f "$service_file" ]]; then
             # Update User/Group
-            sed -i "s/User=root/User=$INSTALL_USER/" "$service_file"
-            sed -i "s/Group=root/Group=$USER_GROUP/" "$service_file"
-            # Update WorkingDirectory and ExecStart paths if needed (assuming they are standard in the file)
-            # The provided service files likely assume /opt/speedtest-monitor. 
-            # If INSTALL_DIR is different, we should update it.
-            sed -i "s|/opt/speedtest-monitor|$INSTALL_DIR|g" "$service_file"
+            run_sed "s/User=root/User=$INSTALL_USER/" "$service_file"
+            run_sed "s/Group=root/Group=$USER_GROUP/" "$service_file"
+            # Update WorkingDirectory and ExecStart paths if needed
+            run_sed "s|/opt/speedtest-monitor|$INSTALL_DIR|g" "$service_file"
         fi
     done
 
@@ -438,6 +630,12 @@ setup_systemd() {
         
         log_success "Master service configured and started"
         log_info "Check status: sudo systemctl status speedtest-master.service"
+        
+        # Check if local node timer exists (created by configure_local_master_node)
+        if [[ -f "$INSTALL_DIR/systemd/speedtest-master-node.timer" ]]; then
+             # It was already installed in configure_local_master_node, but let's just log it
+             log_info "Local node service is also active."
+        fi
         
     elif [[ "$INSTALL_MODE" == "node" || "$INSTALL_MODE" == "single" ]]; then
         # Install Monitor Service & Timer
@@ -469,11 +667,18 @@ do_uninstall() {
         
         sudo systemctl stop speedtest-monitor.service 2>/dev/null || true
         
+        # Stop local node if exists
+        sudo systemctl stop speedtest-master-node.timer 2>/dev/null || true
+        sudo systemctl disable speedtest-master-node.timer 2>/dev/null || true
+        sudo systemctl stop speedtest-master-node.service 2>/dev/null || true
+        
         # Remove unit files
         log_info "Removing systemd unit files..."
         sudo rm -f /etc/systemd/system/speedtest-master.service
         sudo rm -f /etc/systemd/system/speedtest-monitor.service
         sudo rm -f /etc/systemd/system/speedtest-monitor.timer
+        sudo rm -f /etc/systemd/system/speedtest-master-node.service
+        sudo rm -f /etc/systemd/system/speedtest-master-node.timer
         
         sudo systemctl daemon-reload
     else
@@ -546,9 +751,24 @@ main() {
     echo "📊 Log file: $INSTALL_DIR/speedtest.log"
     echo ""
     echo "🚀 Next steps:"
-    echo "1. Verify configuration: cd $INSTALL_DIR && .venv/bin/python -m speedtest_monitor.main"
-    echo "2. Check service status: sudo systemctl status speedtest-monitor.timer"
-    echo "3. View logs: sudo journalctl -u speedtest-monitor.service -f"
+    
+    if [[ "$INSTALL_MODE" == "master" ]]; then
+        echo "1. Verify configuration: cd $INSTALL_DIR && .venv/bin/python -m speedtest_monitor.main"
+        echo "2. Check master service status: sudo systemctl status speedtest-master.service"
+        if [[ -f "$INSTALL_DIR/systemd/speedtest-master-node.timer" ]]; then
+            echo "3. Check local node status: sudo systemctl status speedtest-master-node.timer"
+        fi
+        echo "Note: Master reports depend on nodes sending data."
+    elif [[ "$INSTALL_MODE" == "node" ]]; then
+        echo "1. Verify configuration: cd $INSTALL_DIR && .venv/bin/python -m speedtest_monitor.main"
+        echo "2. Check node service status: sudo systemctl status speedtest-monitor.timer"
+    else
+        # Single mode
+        echo "1. Verify configuration: cd $INSTALL_DIR && .venv/bin/python -m speedtest_monitor.main"
+        echo "2. Check service status: sudo systemctl status speedtest-monitor.timer"
+        echo "3. View logs: sudo journalctl -u speedtest-monitor.service -f"
+    fi
+    
     echo ""
     log_success "Happy monitoring!"
 }
