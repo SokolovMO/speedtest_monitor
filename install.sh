@@ -326,6 +326,78 @@ run_sed() {
     fi
 }
 
+# Helper to patch config using Python (preserves comments better than simple sed)
+patch_config_with_python() {
+    local action="$1"
+    local data="$2"
+    
+    cat << 'EOF' > patch_config.py
+import sys
+import re
+import json
+
+action = sys.argv[1]
+data = json.loads(sys.argv[2])
+config_path = "config.yaml"
+
+with open(config_path, "r") as f:
+    lines = f.readlines()
+
+new_lines = []
+i = 0
+while i < len(lines):
+    line = lines[i]
+    
+    if action == "add_targets" and "telegram_targets:" in line:
+        new_lines.append(line)
+        # Skip existing targets
+        i += 1
+        while i < len(lines) and (lines[i].strip().startswith("-") or lines[i].strip().startswith("chat_id") or lines[i].strip().startswith("default") or not lines[i].strip()):
+             if not lines[i].strip(): # Keep empty lines? Maybe not inside the block
+                 pass 
+             i += 1
+        
+        # Insert new targets
+        for target in data:
+            new_lines.append(f"    - chat_id: {target['chat_id']}\n")
+            new_lines.append(f"      default_language: \"{target['default_language']}\"\n")
+            new_lines.append(f"      default_view_mode: \"{target['default_view_mode']}\"\n")
+            new_lines.append("\n")
+        
+        # Continue with current line (which is the start of next section or whatever stopped the loop)
+        continue
+
+    elif action == "add_node_meta" and "nodes_meta:" in line:
+        new_lines.append(line)
+        # Append new node meta immediately
+        node_id = data['node_id']
+        flag = data['flag']
+        name = data['display_name']
+        new_lines.append(f"    {node_id}:\n")
+        new_lines.append(f"      flag: \"{flag}\"\n")
+        new_lines.append(f"      display_name: \"{name}\"\n")
+        i += 1
+        continue
+
+    elif action == "add_node_order" and "nodes_order:" in line:
+        new_lines.append(line)
+        # Append to order list
+        node_id = data['node_id']
+        new_lines.append(f"    - {node_id}\n")
+        i += 1
+        continue
+
+    new_lines.append(line)
+    i += 1
+
+with open(config_path, "w") as f:
+    f.writelines(new_lines)
+EOF
+
+    .venv/bin/python patch_config.py "$action" "$data"
+    rm patch_config.py
+}
+
 configure_master_settings() {
     echo ""
     echo "🔧 Master Server Configuration"
@@ -344,9 +416,6 @@ configure_master_settings() {
     fi
     
     # Replace api_token in master section
-    # We use a slightly more complex sed to ensure we only replace the one in master section if possible,
-    # but since the file structure is simple, we can target the line.
-    # The example config has 'api_token: "CHANGE_ME_SHARED_SECRET_TOKEN"' under master:
     run_sed "s/api_token: \"CHANGE_ME_SHARED_SECRET_TOKEN\"/api_token: \"$API_TOKEN\"/" "$INSTALL_DIR/config.yaml"
     
     # Schedule Interval
@@ -370,6 +439,54 @@ configure_master_settings() {
     read -p "Node timeout in minutes (default 120): " TIMEOUT
     if [[ -n "$TIMEOUT" && "$TIMEOUT" =~ ^[0-9]+$ ]]; then
         run_sed "s/node_timeout_minutes: 120/node_timeout_minutes: $TIMEOUT/" "$INSTALL_DIR/config.yaml"
+    fi
+
+    # Telegram Targets
+    echo ""
+    echo "👥 Telegram Recipients"
+    echo "You can add multiple Telegram chats/groups to receive reports."
+    
+    TARGETS_JSON="["
+    FIRST_TARGET=true
+    
+    while true; do
+        echo ""
+        if [[ $FIRST_TARGET == true ]]; then
+            read -p "Add a Telegram recipient? (Y/n): " ADD_TARGET
+            if [[ "$ADD_TARGET" =~ ^[Nn]$ ]]; then
+                break
+            fi
+        else
+            read -p "Add another recipient? (y/N): " ADD_TARGET
+            if [[ ! "$ADD_TARGET" =~ ^[Yy]$ ]]; then
+                break
+            fi
+        fi
+        
+        read -p "  Enter Chat ID: " T_CHAT_ID
+        if [[ -z "$T_CHAT_ID" ]]; then
+            echo "  Skipping..."
+            continue
+        fi
+        
+        read -p "  Language (ru/en) [ru]: " T_LANG
+        T_LANG=${T_LANG:-ru}
+        
+        read -p "  View Mode (compact/detailed) [compact]: " T_VIEW
+        T_VIEW=${T_VIEW:-compact}
+        
+        if [[ $FIRST_TARGET == false ]]; then
+            TARGETS_JSON="$TARGETS_JSON,"
+        fi
+        TARGETS_JSON="$TARGETS_JSON {\"chat_id\": $T_CHAT_ID, \"default_language\": \"$T_LANG\", \"default_view_mode\": \"$T_VIEW\"}"
+        FIRST_TARGET=false
+    done
+    TARGETS_JSON="$TARGETS_JSON]"
+    
+    if [[ "$TARGETS_JSON" != "[]" ]]; then
+        log_info "Updating Telegram targets..."
+        cd "$INSTALL_DIR"
+        patch_config_with_python "add_targets" "$TARGETS_JSON"
     fi
     
     echo ""
@@ -469,14 +586,12 @@ Description=Speedtest Monitor Node on Master
 After=network.target
 
 [Service]
-Type=simple
+Type=oneshot
 User=$INSTALL_USER
 Group=$(id -gn $INSTALL_USER)
 WorkingDirectory=$INSTALL_DIR
 Environment="CONFIG_PATH=$INSTALL_DIR/config-master-node.yaml"
 ExecStart=$INSTALL_DIR/.venv/bin/python -m speedtest_monitor.main
-Restart=always
-RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
@@ -495,6 +610,16 @@ Unit=speedtest-master-node.service
 [Install]
 WantedBy=timers.target
 EOF
+
+        # Add local node to Master's nodes_meta and nodes_order so it appears in reports
+        log_info "Adding local node to Master configuration..."
+        cd "$INSTALL_DIR"
+        
+        # JSON data for the node
+        NODE_JSON="{\"node_id\": \"master_node\", \"flag\": \"🇷🇺\", \"display_name\": \"Master Server (Local)\"}"
+        
+        patch_config_with_python "add_node_meta" "$NODE_JSON"
+        patch_config_with_python "add_node_order" "$NODE_JSON"
 
         log_success "Local node configuration created at $CONFIG_FILE"
         
@@ -622,6 +747,10 @@ setup_systemd() {
     if [[ "$INSTALL_MODE" == "master" ]]; then
         # Install Master Service
         log_info "Installing Master service..."
+        
+        # Add TimeoutStopSec to master service to prevent long hangs on restart
+        run_sed "s/\[Service\]/[Service]\\nTimeoutStopSec=60/" "$INSTALL_DIR/systemd/speedtest-master.service"
+        
         sudo cp "$INSTALL_DIR/systemd/speedtest-master.service" /etc/systemd/system/
         
         sudo systemctl daemon-reload
