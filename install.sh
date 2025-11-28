@@ -603,8 +603,7 @@ EOF
 Description=Speedtest Monitor Node on Master - Timer
 
 [Timer]
-OnBootSec=5min
-OnUnitActiveSec=60min
+OnCalendar=hourly
 Unit=speedtest-master-node.service
 
 [Install]
@@ -749,7 +748,7 @@ setup_systemd() {
         log_info "Installing Master service..."
         
         # Add TimeoutStopSec to master service to prevent long hangs on restart
-        run_sed "s/\[Service\]/[Service]\\nTimeoutStopSec=60/" "$INSTALL_DIR/systemd/speedtest-master.service"
+        run_sed "s/\[Service\]/[Service]\\nTimeoutStopSec=10/" "$INSTALL_DIR/systemd/speedtest-master.service"
         
         sudo cp "$INSTALL_DIR/systemd/speedtest-master.service" /etc/systemd/system/
         

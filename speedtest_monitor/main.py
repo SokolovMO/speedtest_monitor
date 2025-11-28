@@ -263,16 +263,18 @@ def main():
         # Parse command line arguments
         args = parse_arguments()
         
-        # Register signal handlers for graceful shutdown
-        signal.signal(signal.SIGINT, signal_handler)
-        signal.signal(signal.SIGTERM, signal_handler)
-        
         # Determine config path
         config_path = determine_config_path(args.config)
         
         # Load and validate configuration
         config = load_config(config_path)
         validate_config(config)
+        
+        # Register signal handlers for graceful shutdown (ONLY for Node/Single mode)
+        # Master mode (aiohttp) handles signals internally to ensure proper cleanup.
+        if config.mode != "master":
+            signal.signal(signal.SIGINT, signal_handler)
+            signal.signal(signal.SIGTERM, signal_handler)
         
         # Override log level if specified
         log_level = args.log_level or config.logging.level
