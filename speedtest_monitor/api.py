@@ -15,6 +15,9 @@ from speedtest_monitor.config import Config
 from speedtest_monitor.logger import get_logger
 from speedtest_monitor.models import NodeReportPayload, SpeedtestResult
 from speedtest_monitor.telegram_notifier import TelegramNotifier
+from speedtest_monitor.speedtest_runner import SpeedtestRunner
+from speedtest_monitor.utils import get_system_info
+from speedtest_monitor.models import SpeedtestResult as ModelSpeedtestResult
 
 logger = get_logger()
 
@@ -43,6 +46,7 @@ class APIServer:
         self.app.on_startup.append(self.start_background_tasks)
         self.app.on_cleanup.append(self.cleanup_background_tasks)
         self.scheduler_task = None
+        self.master_speedtest_task = None
 
     def setup_routes(self):
         """Define API routes."""
@@ -72,6 +76,17 @@ class APIServer:
         # Start Telegram polling
         self.polling_task = asyncio.create_task(self.notifier.start_polling())
         logger.info("Telegram polling started")
+        
+        # Start Master Speedtest Loop (if configured)
+        # We check if master should run speedtests. 
+        # We can assume if it's master, it might want to report itself.
+        # Let's check if there is a node_id in config.master.nodes_meta that corresponds to "master" or similar?
+        # Or we can just check if we have a node_id configured in 'node' section even if mode is master?
+        # Or we can add a specific flag.
+        # For now, let's assume if 'node' section is present and valid, we run it.
+        if self.config.node and self.config.node.node_id:
+             self.master_speedtest_task = asyncio.create_task(self.master_speedtest_loop())
+             logger.info(f"Master speedtest loop started for node_id: {self.config.node.node_id}")
 
     async def cleanup_background_tasks(self, app):
         """Cleanup background tasks on app shutdown."""
@@ -88,8 +103,80 @@ class APIServer:
                 await self.polling_task
             except asyncio.CancelledError:
                 pass
+
+        if self.master_speedtest_task:
+            self.master_speedtest_task.cancel()
+            try:
+                await self.master_speedtest_task
+            except asyncio.CancelledError:
+                pass
                 
         logger.info("Background tasks stopped")
+
+    async def master_speedtest_loop(self):
+        """
+        Periodic task to run speedtest on the master server itself.
+        """
+        # Use the same interval as the scheduler or a default one?
+        # Ideally it should match the reporting interval or be configurable.
+        # Let's use master.schedule.interval_minutes for now.
+        interval = self.config.master.schedule.interval_minutes * 60
+        if interval < 300: # Minimum 5 minutes to avoid overload if interval is short
+             interval = 300
+             
+        logger.info(f"Master speedtest loop started. Interval: {interval} seconds")
+
+        while True:
+            try:
+                logger.info("Running master speedtest...")
+                
+                # Run speedtest in a thread executor to avoid blocking the event loop
+                loop = asyncio.get_running_loop()
+                runner = SpeedtestRunner(self.config.speedtest)
+                runner_result = await loop.run_in_executor(None, runner.run)
+                
+                # Prepare data
+                sys_info = get_system_info()
+                os_info = f"{sys_info['os']} {sys_info['os_version']}"
+                
+                # Determine status
+                status = "failed"
+                if runner_result.success:
+                    dl = runner_result.download_mbps
+                    if dl >= self.config.thresholds.good:
+                        status = "excellent"
+                    elif dl >= self.config.thresholds.medium:
+                        status = "good"
+                    elif dl >= self.config.thresholds.low:
+                        status = "degraded"
+                    else:
+                        status = "degraded"
+                
+                # Create Model Object
+                model_result = ModelSpeedtestResult(
+                    node_id=self.config.node.node_id,
+                    timestamp=datetime.now(),
+                    download_mbps=runner_result.download_mbps,
+                    upload_mbps=runner_result.upload_mbps,
+                    ping_ms=runner_result.ping_ms,
+                    status=status,
+                    test_server=f"{runner_result.server_name} ({runner_result.server_location})",
+                    isp=runner_result.isp,
+                    os_info=os_info
+                )
+                
+                # Update Aggregator directly
+                self.aggregator.update_node_result(model_result)
+                logger.info(f"Master speedtest completed and aggregated for node '{self.config.node.node_id}'")
+                
+                # Wait for next interval
+                await asyncio.sleep(interval)
+                
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in master speedtest loop: {e}")
+                await asyncio.sleep(60)
 
     async def scheduler_loop(self):
         """

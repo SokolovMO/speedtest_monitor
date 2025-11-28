@@ -140,14 +140,27 @@ class SpeedtestRunner:
             # Strip ANSI codes first
             output = self._strip_ansi(output)
 
-            # Try JSON format first (official speedtest with --format=json)
-            if output.strip().startswith("{"):
+            # Try JSON format first (official speedtest with --format=json OR speedtest-cli --json)
+            if output.strip().startswith("{") or output.strip().startswith("["):
                 try:
                     data = json.loads(output)
+                    
+                    # Handle speedtest-cli --json (which returns a dict)
+                    if "client" in data and "server" in data:
+                        return SpeedtestResult(
+                            download_mbps=data["download"] / 1_000_000,  # bits to Mbps
+                            upload_mbps=data["upload"] / 1_000_000,
+                            ping_ms=data["ping"],
+                            server_name=data["server"]["sponsor"],
+                            server_location=f"{data['server']['name']}, {data['server']['country']}",
+                            isp=data["client"]["isp"],
+                            success=True,
+                        )
+
                     # Official Ookla speedtest JSON format
                     if "download" in data and "bandwidth" in data.get("download", {}):
                         return SpeedtestResult(
-                            download_mbps=data["download"]["bandwidth"] / 125000,  # bits to Mbps
+                            download_mbps=data["download"]["bandwidth"] / 125000,  # bytes to Mbps (125000 = 1000000 / 8)
                             upload_mbps=data["upload"]["bandwidth"] / 125000,
                             ping_ms=data.get("ping", {}).get("latency", 0),
                             server_name=data.get("server", {}).get("name", "Unknown"),
@@ -318,8 +331,12 @@ class SpeedtestRunner:
                             # If version check fails, use default text output
                             pass
                     else:
-                        # speedtest-cli: use --simple for structured output
-                        cmd.append("--simple")
+                        # speedtest-cli: prefer --json for full data, fallback to --simple if needed
+                        # But --json might not be available in very old versions.
+                        # Let's try to use --json if we can, otherwise default output (human readable) is better than --simple for metadata.
+                        # However, the parser logic for human readable is fragile.
+                        # Let's try --json.
+                        cmd.append("--json")
 
                     # Execute command
                     logger.debug(f"Executing command: {' '.join(cmd)}")
@@ -333,6 +350,15 @@ class SpeedtestRunner:
                     if result.returncode == 0:
                         parsed = self._parse_speedtest_output(result.stdout, command)
                         if parsed:
+                            # If we used --simple (speedtest-cli) and got Unknown server/ISP,
+                            # we might want to try running again without --simple to get metadata?
+                            # Or just accept it.
+                            # Actually, speedtest-cli --json provides everything.
+                            if "speedtest-cli" in command and parsed.server_name == "Unknown" and "--simple" in cmd:
+                                # We used --simple, so we missed metadata.
+                                # Ideally we should use --json or default output for speedtest-cli.
+                                pass
+                            
                             logger.info(
                                 f"Speedtest successful: Download={parsed.download_mbps:.2f} Mbps, "
                                 f"Upload={parsed.upload_mbps:.2f} Mbps, Ping={parsed.ping_ms:.2f} ms"
