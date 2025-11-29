@@ -458,9 +458,6 @@ configure_master() {
     echo "🔧 Master Server Configuration"
     echo "────────────────────────────────────────"
     
-    # Set mode to master
-    run_sed "s/^mode: .*/mode: master/" "$INSTALL_DIR/config.yaml"
-    
     # Telegram Bot Token (Master needs it to send reports)
     echo ""
     echo "🤖 Telegram Bot Configuration"
@@ -495,8 +492,8 @@ EOF
     read -p "Default view mode (compact/detailed) [compact]: " DEF_VIEW
     DEF_VIEW=${DEF_VIEW:-compact}
 
-    # Update telegram_targets
-    TARGETS_JSON="[{\"chat_id\": $CHAT_ID, \"default_language\": \"$DEF_LANG\", \"default_view_mode\": \"$DEF_VIEW\"}]"
+    # Build initial targets list arguments for python script
+    TARGETS_ARGS="--target $CHAT_ID:$DEF_LANG:$DEF_VIEW"
     
     # Loop for additional targets
     while true; do
@@ -518,23 +515,16 @@ EOF
         read -p "Default view mode (compact/detailed) [compact]: " VIEW2
         VIEW2=${VIEW2:-compact}
 
-        # Append to JSON array
-        # Remove closing bracket
-        TARGETS_JSON="${TARGETS_JSON%]}"
-        # Add comma and new object and closing bracket
-        TARGETS_JSON="${TARGETS_JSON}, {\"chat_id\": $CHAT_ID2, \"default_language\": \"$LANG2\", \"default_view_mode\": \"$VIEW2\"}]"
+        TARGETS_ARGS="$TARGETS_ARGS --target $CHAT_ID2:$LANG2:$VIEW2"
     done
-    
-    log_info "Updating Telegram targets..."
-    cd "$INSTALL_DIR"
-    patch_config_with_python "add_targets" "$TARGETS_JSON"
     
     # API Token
     echo ""
     echo "🔑 API Token"
     echo "The API token is a shared secret used by nodes to authenticate with the master."
     
-    EXISTING_TOKEN=$(grep "api_token:" "$INSTALL_DIR/config.yaml" | head -n 1 | awk -F'"' '{print $2}')
+    # Try to read existing token safely (grep is fragile but okay for hint)
+    EXISTING_TOKEN=$(grep "api_token:" "$INSTALL_DIR/config.yaml" | head -n 1 | awk -F'"' '{print $2}' | tr -d ' ')
     
     echo "How do you want to set it?"
     echo "1) Keep existing"
@@ -552,7 +542,6 @@ EOF
             else
                 echo "No valid existing token found. Generating new one."
                 API_TOKEN=$(openssl rand -hex 32)
-                run_sed "s/api_token: \".*\"/api_token: \"$API_TOKEN\"/" "$INSTALL_DIR/config.yaml"
             fi
             ;;
         3)
@@ -561,13 +550,11 @@ EOF
                  echo "Empty token provided. Generating new one."
                  API_TOKEN=$(openssl rand -hex 32)
             fi
-            run_sed "s/api_token: \".*\"/api_token: \"$API_TOKEN\"/" "$INSTALL_DIR/config.yaml"
             ;;
         *)
             # Default to 2 (Auto-generate)
             API_TOKEN=$(openssl rand -hex 32)
             echo "Generated new token: $API_TOKEN"
-            run_sed "s/api_token: \".*\"/api_token: \"$API_TOKEN\"/" "$INSTALL_DIR/config.yaml"
             ;;
     esac
     
@@ -596,10 +583,79 @@ EOF
         *) INTERVAL=60 ;;
     esac
     
-    if [[ -n "$INTERVAL" && "$INTERVAL" =~ ^[0-9]+$ ]]; then
-        # NOTE: this assumes the default interval_minutes in config.yaml.example is 60
-        run_sed "s/interval_minutes: 60/interval_minutes: $INTERVAL/" "$INSTALL_DIR/config.yaml"
-    fi
+    # Apply configuration using Python
+    log_info "Applying master configuration..."
+    
+    cat << EOF > "$INSTALL_DIR/configure_master.py"
+import yaml
+import sys
+import argparse
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--api_token', required=True)
+    parser.add_argument('--interval', type=int, required=True)
+    parser.add_argument('--target', action='append', help='format: chat_id:lang:view')
+    args = parser.parse_args()
+
+    config_path = "$INSTALL_DIR/config.yaml"
+    
+    try:
+        with open(config_path, 'r') as f:
+            cfg = yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        cfg = {}
+
+    # Set mode
+    cfg['mode'] = 'master'
+    
+    # Ensure master section
+    if 'master' not in cfg:
+        cfg['master'] = {}
+        
+    # Set API Token
+    cfg['master']['api_token'] = args.api_token
+    
+    # Set Schedule
+    if 'schedule' not in cfg['master']:
+        cfg['master']['schedule'] = {}
+    cfg['master']['schedule']['interval_minutes'] = args.interval
+    
+    # Set Targets
+    targets = []
+    if args.target:
+        for t in args.target:
+            parts = t.split(':')
+            if len(parts) >= 3:
+                targets.append({
+                    'chat_id': int(parts[0]),
+                    'default_language': parts[1],
+                    'default_view_mode': parts[2]
+                })
+    
+    cfg['master']['telegram_targets'] = targets
+    
+    # Ensure nodes_meta and nodes_order
+    if 'nodes_meta' not in cfg['master']:
+        cfg['master']['nodes_meta'] = {}
+    if 'nodes_order' not in cfg['master']:
+        cfg['master']['nodes_order'] = []
+        
+    # Remove node section if exists
+    if 'node' in cfg:
+        del cfg['node']
+        
+    with open(config_path, 'w') as f:
+        yaml.safe_dump(cfg, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        
+    print("Master configuration saved.")
+
+if __name__ == "__main__":
+    main()
+EOF
+
+    "$INSTALL_DIR/.venv/bin/python" "$INSTALL_DIR/configure_master.py" --api_token "$API_TOKEN" --interval "$INTERVAL" $TARGETS_ARGS
+    rm "$INSTALL_DIR/configure_master.py"
     
     # Configure local node?
     configure_local_master_node
@@ -612,36 +668,17 @@ configure_node() {
     echo "🔧 Node Configuration"
     echo "────────────────────────────────────────"
     
-    # Set mode to node
-    run_sed "s/^mode: .*/mode: node/" "$INSTALL_DIR/config.yaml"
-    
     # Node ID
     read -p "Enter node_id (must match key in master's nodes_meta, e.g. fin, lv, ger): " NODE_ID
-    if [[ -n "$NODE_ID" ]]; then
-        # NOTE: this assumes the default node_id in config.yaml.example is "fin"
-        run_sed "s/node_id: \"fin\"/node_id: \"$NODE_ID\"/" "$INSTALL_DIR/config.yaml"
-    fi
     
     # Description
     read -p "Enter node description: " NODE_DESC
-    if [[ -n "$NODE_DESC" ]]; then
-        run_sed "s/description: \".*\"/description: \"$NODE_DESC\"/" "$INSTALL_DIR/config.yaml"
-    fi
     
     # Master URL
     read -p "Enter Master URL (e.g. http://MASTER_IP:8080/api/v1/report): " MASTER_URL
-    if [[ -n "$MASTER_URL" ]]; then
-        # Escape slashes for sed
-        ESCAPED_URL=$(echo "$MASTER_URL" | sed 's/\//\\\//g')
-        # NOTE: this assumes the default master_url in config.yaml.example is "http://YOUR_MASTER_IP:8080/api/v1/report"
-        run_sed "s/master_url: \"http:\/\/YOUR_MASTER_IP:8080\/api\/v1\/report\"/master_url: \"$ESCAPED_URL\"/" "$INSTALL_DIR/config.yaml"
-    fi
     
     # API Token
     read -p "Enter shared API token (must be the same as on master): " API_TOKEN
-    if [[ -n "$API_TOKEN" ]]; then
-        run_sed "s/api_token: \"CHANGE_ME_SHARED_SECRET_TOKEN\"/api_token: \"$API_TOKEN\"/" "$INSTALL_DIR/config.yaml"
-    fi
     
     # Speedtest Interval
     echo ""
@@ -655,16 +692,61 @@ configure_node() {
     read -p "Select option [4]: " INTERVAL_OPT
     
     case $INTERVAL_OPT in
-        1) TIMER_SPEC="*:0\/5" ;;
-        2) TIMER_SPEC="*:0\/15" ;;
-        3) TIMER_SPEC="*:0\/30" ;;
+        1) TIMER_SPEC="*:0/5" ;;
+        2) TIMER_SPEC="*:0/15" ;;
+        3) TIMER_SPEC="*:0/30" ;;
         4) TIMER_SPEC="hourly" ;;
         5) read -p "Enter OnCalendar value: " TIMER_SPEC ;;
         *) TIMER_SPEC="hourly" ;;
     esac
     
+    # Apply configuration using Python
+    log_info "Applying node configuration..."
+    
+    cat << EOF > "$INSTALL_DIR/configure_node.py"
+import yaml
+import sys
+
+config_path = "$INSTALL_DIR/config.yaml"
+node_id = "$NODE_ID"
+desc = "$NODE_DESC"
+url = "$MASTER_URL"
+token = "$API_TOKEN"
+
+try:
+    with open(config_path, 'r') as f:
+        cfg = yaml.safe_load(f) or {}
+        
+    cfg['mode'] = 'node'
+    
+    if 'node' not in cfg:
+        cfg['node'] = {}
+        
+    if node_id: cfg['node']['node_id'] = node_id
+    if desc: cfg['node']['description'] = desc
+    if url: cfg['node']['master_url'] = url
+    if token: cfg['node']['api_token'] = token
+    
+    # Remove master section
+    if 'master' in cfg:
+        del cfg['master']
+        
+    with open(config_path, 'w') as f:
+        yaml.safe_dump(cfg, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        
+    print("Node configuration saved.")
+
+except Exception as e:
+    print(f"Error: {e}")
+    sys.exit(1)
+EOF
+
+    "$INSTALL_DIR/.venv/bin/python" "$INSTALL_DIR/configure_node.py"
+    rm "$INSTALL_DIR/configure_node.py"
+    
     # Update systemd timer
-    run_sed "s/OnCalendar=.*/OnCalendar=$TIMER_SPEC/" "$INSTALL_DIR/systemd/speedtest-monitor.timer"
+    # We still use sed for the timer file as it is not YAML
+    run_sed "s/OnCalendar=.*/OnCalendar=$(echo $TIMER_SPEC | sed 's/\//\\\//g')/" "$INSTALL_DIR/systemd/speedtest-monitor.timer"
     
     log_success "Node mode configured"
 }
@@ -680,11 +762,11 @@ configure_local_master_node() {
         
         local CONFIG_FILE="$INSTALL_DIR/config-master-node.yaml"
         
-        # Copy existing config as base
+        # Copy existing config as base (though we will rewrite it mostly)
         sudo cp "$INSTALL_DIR/config.yaml" "$CONFIG_FILE"
         
-        # Use Python to safely update the config (handles YAML quoting correctly)
-        cat << EOF > "$INSTALL_DIR/update_node_config.py"
+        # Use Python to safely update the config and add to master meta
+        cat << EOF > "$INSTALL_DIR/update_local_node.py"
 import yaml
 import sys
 import os
@@ -693,28 +775,77 @@ master_config_path = "$INSTALL_DIR/config.yaml"
 node_config_path = "$CONFIG_FILE"
 
 try:
-    # Read master config to get token
+    # 1. Read master config to get token
     with open(master_config_path, 'r') as f:
         master_cfg = yaml.safe_load(f) or {}
     
-    api_token = master_cfg.get('api_token', '')
+    master_section = master_cfg.get('master', {})
+    api_token = master_section.get('api_token', '')
     
-    # Read node config
-    with open(node_config_path, 'r') as f:
-        node_cfg = yaml.safe_load(f) or {}
+    if not api_token:
+        print("Error: master.api_token is empty!")
+        sys.exit(1)
     
-    # Update values
-    node_cfg['mode'] = 'node'
-    node_cfg['node_id'] = 'master_node'
-    node_cfg['description'] = 'Master Server (local node)'
-    node_cfg['master_url'] = 'http://127.0.0.1:8080/api/v1/report'
-    node_cfg['api_token'] = api_token
+    # 2. Create/Update local node config
+    # We build a fresh structure as requested
+    node_cfg = {
+        "mode": "node",
+        "node": {
+            "node_id": "master_node",
+            "description": "Master Server (local node)",
+            "master_url": "http://127.0.0.1:8080/api/v1/report",
+            "api_token": api_token,
+        },
+        "server": {
+            "name": "auto",
+            "location": "auto",
+            "identifier": "auto",
+            "description": "Master local node",
+        },
+        "speedtest": {
+            "timeout": 90,
+            "servers": [],
+            "retry_count": 3,
+            "retry_delay": 5,
+        },
+        "thresholds": {
+            "very_low": 50,
+        },
+    }
     
-    # Write back
     with open(node_config_path, 'w') as f:
         yaml.safe_dump(node_cfg, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
         
     print(f"Successfully synced API token: {api_token[:5]}...")
+    
+    # 3. Update Master Config to include this node in meta and order
+    # Re-read master config to be sure
+    with open(master_config_path, 'r') as f:
+        master_cfg = yaml.safe_load(f) or {}
+        
+    if 'master' not in master_cfg:
+        master_cfg['master'] = {}
+        
+    if 'nodes_meta' not in master_cfg['master']:
+        master_cfg['master']['nodes_meta'] = {}
+        
+    if 'nodes_order' not in master_cfg['master']:
+        master_cfg['master']['nodes_order'] = []
+        
+    # Add meta
+    master_cfg['master']['nodes_meta']['master_node'] = {
+        'flag': "🏠",
+        'display_name': "Master Server (Local Node)"
+    }
+    
+    # Add to order if not present
+    if 'master_node' not in master_cfg['master']['nodes_order']:
+        master_cfg['master']['nodes_order'].append('master_node')
+        
+    with open(master_config_path, 'w') as f:
+        yaml.safe_dump(master_cfg, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        
+    print("Added local node to master configuration.")
 
 except Exception as e:
     print(f"Error updating config: {e}")
@@ -722,11 +853,11 @@ except Exception as e:
 EOF
         
         # Run the python script using the venv python
-        if "$INSTALL_DIR/.venv/bin/python" "$INSTALL_DIR/update_node_config.py"; then
-            rm "$INSTALL_DIR/update_node_config.py"
+        if "$INSTALL_DIR/.venv/bin/python" "$INSTALL_DIR/update_local_node.py"; then
+            rm "$INSTALL_DIR/update_local_node.py"
         else
             log_error "Failed to update local node configuration"
-            rm "$INSTALL_DIR/update_node_config.py"
+            rm "$INSTALL_DIR/update_local_node.py"
             return 1
         fi
         
@@ -760,16 +891,6 @@ Unit=speedtest-master-node.service
 [Install]
 WantedBy=timers.target
 EOF
-
-        # Add local node to Master's nodes_meta and nodes_order so it appears in reports
-        log_info "Adding local node to Master configuration..."
-        cd "$INSTALL_DIR"
-        
-        # JSON data for the node
-        NODE_JSON="{\"node_id\": \"master_node\", \"flag\": \"🏠\", \"display_name\": \"Master Server (Local)\"}"
-        
-        patch_config_with_python "add_node_meta" "$NODE_JSON"
-        patch_config_with_python "add_node_order" "$NODE_JSON"
 
         log_success "Local node configuration created at $CONFIG_FILE"
         
@@ -836,10 +957,21 @@ test_installation() {
     cd "$INSTALL_DIR"
     
     log_info "Testing configuration..."
+    
+    # Test main config
     if .venv/bin/python -c "from pathlib import Path; from speedtest_monitor.config import load_config; load_config(Path('config.yaml'))" 2>/dev/null; then
-        log_success "Configuration test passed"
+        log_success "Main configuration (config.yaml) is valid"
     else
-        log_warning "Configuration test failed - please check .env file"
+        log_error "Main configuration (config.yaml) is invalid!"
+    fi
+    
+    # If local node config exists, test it too
+    if [[ -f "config-master-node.yaml" ]]; then
+        if .venv/bin/python -c "from pathlib import Path; from speedtest_monitor.config import load_config; load_config(Path('config-master-node.yaml'))" 2>/dev/null; then
+            log_success "Local node configuration (config-master-node.yaml) is valid"
+        else
+            log_error "Local node configuration (config-master-node.yaml) is invalid!"
+        fi
     fi
     
     log_info "Testing speedtest detection..."
