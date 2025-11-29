@@ -28,10 +28,6 @@ LOG_FORMAT = "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</le
 LOG_ROTATION = "10 MB"
 LOG_RETENTION = "1 week"
 
-# Speedtest Result Thresholds (Mbps)
-SLOW_DOWNLOAD_THRESHOLD = 10
-SLOW_UPLOAD_THRESHOLD = 5
-
 # File Paths
 DEFAULT_CONFIG_PATH = "config.yaml"
 DEFAULT_ENV_PATH = ".env"

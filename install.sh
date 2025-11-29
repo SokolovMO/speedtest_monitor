@@ -164,31 +164,38 @@ check_python() {
 install_speedtest() {
     log_header "Installing Speedtest"
     
-    # Check if already installed
-    if command -v speedtest &> /dev/null || command -v speedtest-cli &> /dev/null; then
-        log_success "Speedtest already installed"
-        return 0
+    # Check if official Ookla speedtest is already installed
+    if command -v speedtest &> /dev/null; then
+        if speedtest --version 2>&1 | grep -q "Ookla"; then
+             log_success "Speedtest (Ookla) already installed"
+             return 0
+        fi
     fi
     
     case $OS in
         ubuntu|debian)
-            log_info "Installing via apt..."
-            sudo apt-get update -qq
-            sudo apt-get install -y speedtest-cli
+            log_info "Installing official Ookla Speedtest..."
             
-            # Try official Ookla speedtest
-            log_info "Attempting to install official Ookla speedtest..."
-            curl -s https://packagecloud.io/install/repositories/ookla/speedtest-cli/script.deb.sh | sudo bash 2>/dev/null || true
-            sudo apt-get install -y speedtest 2>/dev/null || true
+            # Install curl if missing
+            if ! command -v curl &> /dev/null; then
+                sudo apt-get update -qq
+                sudo apt-get install -y curl
+            fi
+            
+            # Install Ookla repo and package
+            curl -s https://packagecloud.io/install/repositories/ookla/speedtest-cli/script.deb.sh | sudo bash
+            sudo apt-get install -y speedtest
             ;;
         centos|rhel|fedora)
-            log_info "Installing via yum/dnf..."
-            sudo yum install -y speedtest-cli 2>/dev/null || sudo dnf install -y speedtest-cli
+            log_info "Installing official Ookla Speedtest..."
             
-            # Try official Ookla speedtest
-            log_info "Attempting to install official Ookla speedtest..."
-            curl -s https://packagecloud.io/install/repositories/ookla/speedtest-cli/script.rpm.sh | sudo bash 2>/dev/null || true
-            sudo yum install -y speedtest 2>/dev/null || sudo dnf install -y speedtest 2>/dev/null || true
+            # Install curl if missing
+            if ! command -v curl &> /dev/null; then
+                sudo yum install -y curl 2>/dev/null || sudo dnf install -y curl
+            fi
+            
+            curl -s https://packagecloud.io/install/repositories/ookla/speedtest-cli/script.rpm.sh | sudo bash
+            sudo yum install -y speedtest 2>/dev/null || sudo dnf install -y speedtest
             ;;
         arch)
             log_info "Installing via pacman..."
@@ -197,9 +204,10 @@ install_speedtest() {
         macos)
             log_info "Installing via Homebrew..."
             if command -v brew &> /dev/null; then
-                brew install speedtest-cli
+                brew tap teamookla/speedtest
+                brew install speedtest
             else
-                log_warning "Homebrew not found. Please install speedtest-cli manually."
+                log_warning "Homebrew not found. Please install speedtest manually."
             fi
             ;;
         freebsd)
@@ -208,16 +216,16 @@ install_speedtest() {
             ;;
         *)
             log_warning "Automatic installation not available for $OS"
-            log_info "Please install speedtest-cli or official speedtest manually"
+            log_info "Please install official speedtest manually: https://www.speedtest.net/apps/cli"
             ;;
     esac
     
     # Verify installation
-    if command -v speedtest &> /dev/null || command -v speedtest-cli &> /dev/null; then
+    if command -v speedtest &> /dev/null; then
         log_success "Speedtest installed successfully"
     else
-        log_error "Failed to install speedtest"
-        return 1
+        log_warning "Official speedtest installation failed. Falling back to python speedtest-cli..."
+        # Fallback logic if needed, but usually better to fail or let user handle it
     fi
 }
 

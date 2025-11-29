@@ -101,14 +101,14 @@ class SpeedtestRunner:
             except Exception:
                 pass
 
-        # Prioritize speedtest-cli over official speedtest if official is failing
-        # Move speedtest-cli commands to the front of the list
+        # Prioritize official speedtest over speedtest-cli
+        # Move official commands to the front of the list
         cli_commands = [cmd for cmd in commands if "speedtest-cli" in cmd]
         official_commands = [cmd for cmd in commands if "speedtest-cli" not in cmd]
         
-        # If we have both, try cli first as it seems more reliable on some servers
+        # If we have both, try official first as it is more reliable
         if cli_commands and official_commands:
-            return cli_commands + official_commands
+            return official_commands + cli_commands
             
         return commands
 

@@ -13,6 +13,7 @@ ExecStart=/opt/speedtest-monitor/.venv/bin/python -m speedtest_monitor.main
 
 # Environment
 Environment="PATH=/opt/speedtest-monitor/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="HOME=/root"
 
 # Logging
 StandardOutput=journal

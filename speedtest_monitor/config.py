@@ -51,6 +51,8 @@ class TelegramConfig:
     check_interval: int = 3600
     send_always: bool = False
     format: str = "html"
+    language: str = "ru"
+    message_style: str = "detailed"
 
 
 @dataclass

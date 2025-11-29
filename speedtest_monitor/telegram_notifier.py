@@ -30,8 +30,7 @@ from .constants import (
 )
 from .logger import get_logger
 from .speedtest_runner import SpeedtestResult
-from .utils import format_ping, format_speed, get_location_by_ip, get_system_info
-from .localization import get_label
+from speedtest_monitor.message_formatter import MessageFormatter
 
 logger = get_logger()
 
@@ -110,13 +109,13 @@ class TelegramNotifier:
             if self.aggregator:
                 prefs = get_chat_preferences(chat_id)
                 if prefs:
-                    from speedtest_monitor.view_renderer import render_compact, render_detailed
-                    
                     report = self.aggregator.build_report()
-                    if prefs.view_mode == "detailed":
-                        text = render_detailed(report, prefs.language)
-                    else:
-                        text = render_compact(report, prefs.language)
+                    text = MessageFormatter.format_master_report(
+                        report, 
+                        style=prefs.view_mode, 
+                        lang=prefs.language,
+                        status_config=self.config.status_config
+                    )
                     
                     keyboard = self._get_keyboard(prefs.language, prefs.view_mode)
                     
@@ -179,48 +178,18 @@ class TelegramNotifier:
                 self._server_identifier = self.config.server.identifier
         return self._server_identifier
 
-    def _get_status_emoji(self, download_mbps: float, language: str) -> tuple[str, str]:
-        """
-        Determine status emoji and text based on download speed.
-
-        Args:
-            download_mbps: Download speed in Mbps
-            language: Language code ("en" or "ru")
-
-        Returns:
-            Tuple of (emoji, status_text)
-        """
+    def _calculate_status_key(self, download_mbps: float) -> str:
+        """Calculate status key based on download speed."""
         thresholds = self.config.thresholds
-        status_key = "excellent"
-
         if download_mbps < thresholds.very_low:
-            status_key = "very_low"
+            return "very_low"
         elif download_mbps < thresholds.low:
-            status_key = "low"
+            return "low"
         elif download_mbps < thresholds.medium:
-            status_key = "normal"
+            return "normal"
         elif download_mbps < thresholds.good:
-            status_key = "good"
-
-        # Try to get from config
-        if self.config.status_config and status_key in self.config.status_config.single_node_statuses:
-            status_cfg = self.config.status_config.single_node_statuses[status_key]
-            emoji = status_cfg.emoji
-            text = status_cfg.label.get(language)
-            if not text:
-                text = get_label(f"status_{status_key}", language)
-            return emoji, text
-
-        # Fallback to hardcoded defaults
-        defaults = {
-            "very_low": ("🚨❌", get_label("status_very_low", language)),
-            "low": ("⚠️🐌", get_label("status_low", language)),
-            "normal": ("✅🚗", get_label("status_normal", language)),
-            "good": ("👍🛜", get_label("status_good", language)),
-            "excellent": ("🚀⚡", get_label("status_excellent", language)),
-        }
-        
-        return defaults.get(status_key, ("❓", "Unknown"))
+            return "good"
+        return "excellent"
 
     def _format_message(self, result: SpeedtestResult, language: str) -> str:
         """
@@ -233,79 +202,28 @@ class TelegramNotifier:
         Returns:
             Formatted message text
         """
-        server_name = self._get_server_name()
-        server_location = self._get_server_location()
-        server_id = self._get_server_identifier()
-        description = self.config.server.description
-
-        system_info = get_system_info()
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        server_info = {
+            "name": self._get_server_name(),
+            "location": self._get_server_location(),
+            "id": self._get_server_identifier(),
+            "description": self.config.server.description
+        }
         
-        report_title = get_label("report_title", language)
+        status_key = "unknown"
+        if result.success:
+            status_key = self._calculate_status_key(result.download_mbps)
 
-        if not result.success:
-            # Error message
-            message = (
-                f"📊 <b>{report_title}</b>\n\n"
-                f"🖥 <b>Server / Сервер:</b> {server_name}"
-            )
-            if server_location != "Unknown":
-                message += f" ({server_location})"
-            message += "\n"
+        # Use configured style or default to detailed for single mode
+        style = self.config.telegram.message_style if hasattr(self.config.telegram, "message_style") else "detailed"
 
-            if description:
-                message += f"📝 <b>Description / Описание:</b> {description}\n"
-
-            message += (
-                f"🆔 <b>ID:</b> {server_id}\n"
-                f"🕐 <b>Time / Время:</b> {timestamp}\n\n"
-                f"❌ <b>Error / Ошибка:</b> {result.error_message}\n\n"
-                f"💻 <b>OS / ОС:</b> {system_info['os']} {system_info['os_version']}"
-            )
-            return message
-
-        # Success message
-        emoji, status_text = self._get_status_emoji(result.download_mbps, language)
-        
-        # Localized labels
-        lbl_download = get_label("download", language)
-        lbl_upload = get_label("upload", language)
-        lbl_ping = get_label("ping", language)
-        lbl_status = get_label("status", language)
-        lbl_test_server = get_label("test_server", language)
-        lbl_isp = get_label("isp", language)
-        lbl_os = get_label("os", language)
-
-        message = (
-            f"📊 <b>{report_title}</b>\n\n"
-            f"🖥 <b>Server / Сервер:</b> {server_name}"
+        return MessageFormatter.format_single_result(
+            result=result,
+            style=style,
+            lang=language,
+            server_info=server_info,
+            status_config=self.config.status_config,
+            status_key=status_key
         )
-        if server_location != "Unknown":
-            message += f" ({server_location})"
-        message += "\n"
-
-        if description:
-            message += f"📝 <b>Description / Описание:</b> {description}\n"
-
-        message += (
-            f"🆔 <b>ID:</b> {server_id}\n"
-            f"🕐 <b>Time / Время:</b> {timestamp}\n\n"
-            f"📶 <b>Results / Результаты:</b>\n"
-            f"⬇️ <b>{lbl_download}:</b> {format_speed(result.download_mbps)}\n"
-            f"⬆️ <b>{lbl_upload}:</b> {format_speed(result.upload_mbps)}\n"
-            f"📡 <b>{lbl_ping}:</b> {format_ping(result.ping_ms)}\n\n"
-            f"📈 <b>{lbl_status}:</b> {emoji} {status_text}\n\n"
-        )
-
-        if result.server_location:
-            message += f"🌐 <b>{lbl_test_server}:</b> {result.server_location}\n"
-
-        if result.isp:
-            message += f"🏢 <b>{lbl_isp}:</b> {result.isp}\n"
-
-        message += f"💻 <b>{lbl_os}:</b> {system_info['os']} {system_info['os_version']}"
-
-        return message
 
     def _should_send_notification(self, result: SpeedtestResult) -> bool:
         """
@@ -393,12 +311,12 @@ class TelegramNotifier:
             # Send to all chat_ids (supports both groups and personal messages)
             for chat_id in self.config.telegram.chat_ids:
                 # Determine language
-                lang = "ru" # Default
+                lang = self.config.telegram.language if hasattr(self.config.telegram, "language") else "ru"
                 try:
                     cid = int(chat_id)
                     defaults = ChatPreferences(
                         chat_id=cid,
-                        language="ru",
+                        language=lang,
                         view_mode="compact",
                         created_at=datetime.now(),
                         updated_at=datetime.now(),
@@ -468,8 +386,6 @@ class TelegramNotifier:
             logger.warning("No telegram targets configured for master mode")
             return False
 
-        from speedtest_monitor.view_renderer import render_compact, render_detailed
-
         async with Bot(token=self.config.telegram.bot_token) as bot:
             success_count = 0
             targets = self.config.master.telegram_targets
@@ -486,10 +402,12 @@ class TelegramNotifier:
                 prefs = ensure_default_preferences(target.chat_id, defaults)
                 
                 # Render message
-                if prefs.view_mode == "detailed":
-                    message = render_detailed(report, prefs.language, self.config.status_config)
-                else:
-                    message = render_compact(report, prefs.language, self.config.status_config)
+                message = MessageFormatter.format_master_report(
+                    report, 
+                    style=prefs.view_mode, 
+                    lang=prefs.language,
+                    status_config=self.config.status_config
+                )
                 
                 keyboard = self._get_keyboard(prefs.language, prefs.view_mode)
                 
