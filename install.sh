@@ -906,21 +906,15 @@ EOF
     else
         # Cleanup old units if they exist
         if [[ -f "/etc/systemd/system/speedtest-master-node.service" || -f "/etc/systemd/system/speedtest-master-node.timer" ]]; then
-            echo ""
-            echo "Found existing local node systemd units."
-            read -p "Do you want to stop and disable the local node on this master? (y/N): " CLEANUP
-            
-            if [[ "$CLEANUP" =~ ^[Yy]$ ]]; then
-                log_info "Cleaning up local node units..."
-                sudo systemctl stop speedtest-master-node.timer 2>/dev/null || true
-                sudo systemctl disable speedtest-master-node.timer 2>/dev/null || true
-                sudo systemctl stop speedtest-master-node.service 2>/dev/null || true
-                sudo systemctl disable speedtest-master-node.service 2>/dev/null || true
-                sudo rm -f /etc/systemd/system/speedtest-master-node.service
-                sudo rm -f /etc/systemd/system/speedtest-master-node.timer
-                sudo systemctl daemon-reload
-                log_info "Local node units cleaned up. Master now runs without a local node on this host."
-            fi
+            log_info "Cleaning up existing local node units..."
+            sudo systemctl stop speedtest-master-node.timer 2>/dev/null || true
+            sudo systemctl disable speedtest-master-node.timer 2>/dev/null || true
+            sudo systemctl stop speedtest-master-node.service 2>/dev/null || true
+            sudo systemctl disable speedtest-master-node.service 2>/dev/null || true
+            sudo rm -f /etc/systemd/system/speedtest-master-node.service
+            sudo rm -f /etc/systemd/system/speedtest-master-node.timer
+            sudo systemctl daemon-reload
+            log_info "Local node units cleaned up. Master now runs without a local node on this host."
         fi
     fi
 }
