@@ -683,20 +683,52 @@ configure_local_master_node() {
         # Copy existing config as base
         sudo cp "$INSTALL_DIR/config.yaml" "$CONFIG_FILE"
         
-        # Get API Token from master config
-        local API_TOKEN=$(grep "api_token:" "$INSTALL_DIR/config.yaml" | head -n 1 | awk -F'"' '{print $2}')
+        # Use Python to safely update the config (handles YAML quoting correctly)
+        cat << EOF > "$INSTALL_DIR/update_node_config.py"
+import yaml
+import sys
+import os
+
+master_config_path = "$INSTALL_DIR/config.yaml"
+node_config_path = "$CONFIG_FILE"
+
+try:
+    # Read master config to get token
+    with open(master_config_path, 'r') as f:
+        master_cfg = yaml.safe_load(f) or {}
+    
+    api_token = master_cfg.get('api_token', '')
+    
+    # Read node config
+    with open(node_config_path, 'r') as f:
+        node_cfg = yaml.safe_load(f) or {}
+    
+    # Update values
+    node_cfg['mode'] = 'node'
+    node_cfg['node_id'] = 'master_node'
+    node_cfg['description'] = 'Master Server (local node)'
+    node_cfg['master_url'] = 'http://127.0.0.1:8080/api/v1/report'
+    node_cfg['api_token'] = api_token
+    
+    # Write back
+    with open(node_config_path, 'w') as f:
+        yaml.safe_dump(node_cfg, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
         
-        # Update config for local node
-        run_sed "s/^mode: .*/mode: node/" "$CONFIG_FILE"
-        run_sed "s/node_id: .*/node_id: \"master_node\"/" "$CONFIG_FILE"
-        run_sed "s/description: .*/description: \"Master Server (local node)\"/" "$CONFIG_FILE"
+    print(f"Successfully synced API token: {api_token[:5]}...")
+
+except Exception as e:
+    print(f"Error updating config: {e}")
+    sys.exit(1)
+EOF
         
-        # Set Master URL to localhost
-        local LOCAL_URL="http:\/\/127.0.0.1:8080\/api\/v1\/report"
-        run_sed "s/master_url: .*/master_url: \"$LOCAL_URL\"/" "$CONFIG_FILE"
-        
-        # Ensure API token is set
-        run_sed "s/api_token: \".*\"/api_token: \"$API_TOKEN\"/" "$CONFIG_FILE"
+        # Run the python script using the venv python
+        if "$INSTALL_DIR/.venv/bin/python" "$INSTALL_DIR/update_node_config.py"; then
+            rm "$INSTALL_DIR/update_node_config.py"
+        else
+            log_error "Failed to update local node configuration"
+            rm "$INSTALL_DIR/update_node_config.py"
+            return 1
+        fi
         
         # Create Systemd Service
         cat << EOF | sudo tee "$INSTALL_DIR/systemd/speedtest-master-node.service" > /dev/null
@@ -749,6 +781,25 @@ EOF
             sudo systemctl daemon-reload
             sudo systemctl enable --now speedtest-master-node.timer
             log_success "Local node timer started"
+        fi
+    else
+        # Cleanup old units if they exist
+        if [[ -f "/etc/systemd/system/speedtest-master-node.service" || -f "/etc/systemd/system/speedtest-master-node.timer" ]]; then
+            echo ""
+            echo "Found existing local node systemd units."
+            read -p "Do you want to stop and disable the local node on this master? (y/N): " CLEANUP
+            
+            if [[ "$CLEANUP" =~ ^[Yy]$ ]]; then
+                log_info "Cleaning up local node units..."
+                sudo systemctl stop speedtest-master-node.timer 2>/dev/null || true
+                sudo systemctl disable speedtest-master-node.timer 2>/dev/null || true
+                sudo systemctl stop speedtest-master-node.service 2>/dev/null || true
+                sudo systemctl disable speedtest-master-node.service 2>/dev/null || true
+                sudo rm -f /etc/systemd/system/speedtest-master-node.service
+                sudo rm -f /etc/systemd/system/speedtest-master-node.timer
+                sudo systemctl daemon-reload
+                log_info "Local node units cleaned up. Master now runs without a local node on this host."
+            fi
         fi
     fi
 }
