@@ -399,9 +399,6 @@ configure_single() {
     echo "🔧 Single Mode Configuration"
     echo "────────────────────────────────────────"
     
-    # Set mode to single
-    run_sed "s/^mode: .*/mode: single/" "$INSTALL_DIR/config.yaml"
-
     # Telegram Bot Token
     echo ""
     echo "🤖 Telegram Bot Configuration"
@@ -440,15 +437,61 @@ EOF
     echo ""
     read -p "Enter Telegram Chat ID: " CHAT_ID
     
-    # Update config.yaml with chat_id
-    run_sed "s/YOUR_CHAT_ID_HERE/$CHAT_ID/" "$INSTALL_DIR/config.yaml"
-    
     # Server description
     echo ""
     read -p "Enter server description (optional): " SERVER_DESC
-    if [[ -n "$SERVER_DESC" ]]; then
-        run_sed "s/description: \".*\"/description: \"$SERVER_DESC\"/" "$INSTALL_DIR/config.yaml"
-    fi
+    
+    # Apply configuration using Python
+    log_info "Applying single mode configuration..."
+    
+    cat << EOF > "$INSTALL_DIR/configure_single.py"
+# -*- coding: utf-8 -*-
+import yaml
+import sys
+
+config_path = "$INSTALL_DIR/config.yaml"
+chat_id = "$CHAT_ID"
+desc = "$SERVER_DESC"
+
+try:
+    with open(config_path, 'r') as f:
+        cfg = yaml.safe_load(f) or {}
+        
+    cfg['mode'] = 'single'
+    
+    # Update Chat ID
+    if 'telegram' not in cfg:
+        cfg['telegram'] = {}
+    
+    # Ensure chat_ids is a list
+    if 'chat_ids' not in cfg['telegram'] or not isinstance(cfg['telegram']['chat_ids'], list):
+        cfg['telegram']['chat_ids'] = []
+        
+    # Replace placeholder or add new
+    if "YOUR_CHAT_ID_HERE" in cfg['telegram']['chat_ids']:
+        cfg['telegram']['chat_ids'].remove("YOUR_CHAT_ID_HERE")
+        
+    if chat_id and chat_id not in cfg['telegram']['chat_ids']:
+        cfg['telegram']['chat_ids'].append(chat_id)
+        
+    # Update Description
+    if desc:
+        if 'server' not in cfg:
+            cfg['server'] = {}
+        cfg['server']['description'] = desc
+        
+    with open(config_path, 'w') as f:
+        yaml.safe_dump(cfg, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+        
+    print("Single mode configuration saved.")
+
+except Exception as e:
+    print(f"Error: {e}")
+    sys.exit(1)
+EOF
+
+    "$INSTALL_DIR/.venv/bin/python" "$INSTALL_DIR/configure_single.py"
+    rm "$INSTALL_DIR/configure_single.py"
     
     log_success "Single mode configured"
 }
