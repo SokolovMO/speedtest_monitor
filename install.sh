@@ -186,36 +186,41 @@ install_speedtest() {
             curl -s https://packagecloud.io/install/repositories/ookla/speedtest-cli/script.deb.sh | sudo bash
             
             if ! sudo apt-get install -y speedtest; then
-                log_warning "apt-get failed to install speedtest. Trying snap..."
-                if command -v snap &> /dev/null; then
-                    sudo snap install speedtest
-                else
-                    log_warning "Snap not found. Attempting manual binary installation..."
-                    ARCH=$(uname -m)
-                    URL=""
-                    if [ "$ARCH" = "x86_64" ]; then
-                        URL="https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-x86_64.tgz"
-                    elif [ "$ARCH" = "aarch64" ]; then
-                        URL="https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-aarch64.tgz"
+                log_warning "apt-get failed to install speedtest. Attempting manual binary installation..."
+                
+                # Try manual installation first to avoid Snap AppArmor issues
+                ARCH=$(uname -m)
+                URL=""
+                if [ "$ARCH" = "x86_64" ]; then
+                    URL="https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-x86_64.tgz"
+                elif [ "$ARCH" = "aarch64" ]; then
+                    URL="https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-aarch64.tgz"
+                fi
+                
+                MANUAL_SUCCESS=false
+                if [ -n "$URL" ]; then
+                    if ! command -v wget &> /dev/null; then
+                        sudo apt-get install -y wget
                     fi
-                    
-                    if [ -n "$URL" ]; then
-                        if ! command -v wget &> /dev/null; then
-                            sudo apt-get install -y wget
-                        fi
-                        wget -qO speedtest.tgz "$URL"
-                        if [ -f speedtest.tgz ]; then
-                            tar -xvf speedtest.tgz speedtest
-                            sudo mv speedtest /usr/bin/
-                            sudo chown root:root /usr/bin/speedtest
-                            rm speedtest.tgz speedtest.md speedtest.5 2>/dev/null || true
-                            log_success "Speedtest installed manually"
-                        else
-                            log_error "Failed to download speedtest binary"
-                        fi
+                    wget -qO speedtest.tgz "$URL"
+                    if [ -f speedtest.tgz ]; then
+                        tar -xvf speedtest.tgz speedtest
+                        sudo mv speedtest /usr/bin/
+                        sudo chown root:root /usr/bin/speedtest
+                        rm speedtest.tgz speedtest.md speedtest.5 2>/dev/null || true
+                        log_success "Speedtest installed manually"
+                        MANUAL_SUCCESS=true
                     else
-                        log_error "Unsupported architecture for manual download: $ARCH"
+                        log_error "Failed to download speedtest binary"
                     fi
+                else
+                    log_error "Unsupported architecture for manual download: $ARCH"
+                fi
+                
+                # Only fall back to snap if manual installation failed
+                if [ "$MANUAL_SUCCESS" = false ] && command -v snap &> /dev/null; then
+                    log_warning "Manual installation failed. Falling back to snap..."
+                    sudo snap install speedtest
                 fi
             fi
             ;;

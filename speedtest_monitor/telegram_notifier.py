@@ -192,13 +192,14 @@ class TelegramNotifier:
             return "good"
         return "excellent"
 
-    def _format_message(self, result: SpeedtestResult, language: str) -> str:
+    def _format_message(self, result: SpeedtestResult, language: str = "ru", style: Optional[str] = None) -> str:
         """
-        Format speedtest result as Telegram message.
+        Format speedtest result message.
 
         Args:
             result: Speedtest result to format
             language: Language code ("en" or "ru")
+            style: Message style ("compact" or "detailed"). If None, uses config or default.
 
         Returns:
             Formatted message text
@@ -214,8 +215,9 @@ class TelegramNotifier:
         if result.success:
             status_key = self._calculate_status_key(result.download_mbps)
 
-        # Use configured style or default to detailed for single mode
-        style = self.config.telegram.message_style if hasattr(self.config.telegram, "message_style") else "detailed"
+        # Use provided style, or configured style, or default to detailed
+        if not style:
+            style = self.config.telegram.message_style if hasattr(self.config.telegram, "message_style") else "detailed"
 
         return MessageFormatter.format_single_result(
             result=result,
@@ -247,7 +249,7 @@ class TelegramNotifier:
         # Send only if speed is below threshold
         return result.download_mbps < self.config.thresholds.low
 
-    async def _send_to_recipient(self, bot: Bot, chat_id: str, message: str) -> bool:
+    async def _send_to_recipient(self, bot: Bot, chat_id: str, message: str, reply_markup: Optional[InlineKeyboardMarkup] = None) -> bool:
         """
         Send message to a single recipient with retry logic.
         
@@ -255,6 +257,7 @@ class TelegramNotifier:
             bot: Bot instance
             chat_id: Chat or user ID
             message: Message text
+            reply_markup: Optional keyboard markup
             
         Returns:
             True if sent successfully
@@ -266,6 +269,7 @@ class TelegramNotifier:
                         chat_id=chat_id,
                         text=message,
                         parse_mode=ParseMode.HTML,
+                        reply_markup=reply_markup,
                     ),
                     timeout=TELEGRAM_API_TIMEOUT,
                 )
@@ -311,31 +315,35 @@ class TelegramNotifier:
             
             # Send to all chat_ids (supports both groups and personal messages)
             for chat_id in self.config.telegram.chat_ids:
-                # Determine language
+                # Determine language and style from preferences
                 lang = self.config.telegram.language if hasattr(self.config.telegram, "language") else "ru"
+                view_mode = "detailed" # Default fallback
+                
                 try:
                     cid = int(chat_id)
                     defaults = ChatPreferences(
                         chat_id=cid,
                         language=lang,
-                        view_mode="compact",
+                        view_mode="detailed", # Default for single mode
                         created_at=datetime.now(),
                         updated_at=datetime.now(),
                     )
                     prefs = ensure_default_preferences(cid, defaults)
                     lang = prefs.language
+                    view_mode = prefs.view_mode
                 except ValueError:
                     # If chat_id is not an int, fallback to default
                     pass
 
-                message = self._format_message(result, lang)
+                message = self._format_message(result, lang, style=view_mode)
+                keyboard = self._get_keyboard(lang, view_mode)
                 
                 # Validate message length
                 if len(message) > MAX_MESSAGE_LENGTH:
                     logger.warning(f"Message too long ({len(message)} chars), truncating...")
                     message = message[:MAX_MESSAGE_LENGTH - 3] + "..."
 
-                if await self._send_to_recipient(bot, chat_id, message):
+                if await self._send_to_recipient(bot, chat_id, message, reply_markup=keyboard):
                     success_count += 1
             
             if success_count > 0:
