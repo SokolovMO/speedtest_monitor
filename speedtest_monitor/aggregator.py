@@ -9,6 +9,7 @@ Responsible for:
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
+from speedtest_monitor import get_logger
 from speedtest_monitor.config import Config
 from speedtest_monitor.models import (
     AggregatedReport,
@@ -33,6 +34,7 @@ class Aggregator:
         self.config = config
         self.last_results: Dict[str, SpeedtestResult] = {}
         self.last_updated_at: Dict[str, datetime] = {}
+        self._logged_unknown_nodes = set()
 
     def update_node_result(self, result: SpeedtestResult) -> None:
         """
@@ -41,6 +43,18 @@ class Aggregator:
         Args:
             result: The speedtest result received from a node.
         """
+        # Check if node is known in metadata
+        if self.config.master and result.node_id not in self.config.master.nodes_meta:
+            if result.node_id not in self._logged_unknown_nodes:
+                logger = get_logger()
+                logger.warning(
+                    f'unknown node_id "{result.node_id}". please add to nodes_meta. suggested config:\n'
+                    f'    {result.node_id}:\n'
+                    f'      flag: "🏳️"\n'
+                    f'      display_name: "Node {result.node_id}"'
+                )
+                self._logged_unknown_nodes.add(result.node_id)
+
         self.last_results[result.node_id] = result
         self.last_updated_at[result.node_id] = datetime.now()
 

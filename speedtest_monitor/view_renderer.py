@@ -57,7 +57,7 @@ def render_compact(report: AggregatedReport, language: str, status_config: Optio
     lines = [f"<b>{title}</b> ({last_hour})", ""]
     
     for node in report.nodes:
-        flag = node.meta.flag or ""
+        flag = node.meta.flag or "🛰️"
         name = node.meta.display_name or node.meta.node_id
         
         if node.is_online and node.last_result:
@@ -108,7 +108,7 @@ def render_detailed(report: AggregatedReport, language: str, status_config: Opti
     lines = [f"<b>{title}</b> ({last_hour})", ""]
     
     for i, node in enumerate(report.nodes):
-        flag = node.meta.flag or ""
+        flag = node.meta.flag or "🛰️"
         name = node.meta.display_name or node.meta.node_id
         
         lines.append(f"<b>{flag} {name}</b>")

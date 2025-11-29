@@ -398,7 +398,66 @@ EOF
     rm patch_config.py
 }
 
-configure_master_settings() {
+configure_single() {
+    echo ""
+    echo "🔧 Single Mode Configuration"
+    echo "────────────────────────────────────────"
+    
+    # Set mode to single
+    run_sed "s/^mode: .*/mode: single/" "$INSTALL_DIR/config.yaml"
+
+    # Telegram Bot Token
+    echo ""
+    echo "🤖 Telegram Bot Configuration"
+    echo "────────────────────────────────────────"
+    echo "To get a bot token:"
+    echo "1. Message @BotFather on Telegram"
+    echo "2. Send /newbot and follow instructions"
+    echo "3. Copy the token provided"
+    echo ""
+    
+    if [[ -f "$INSTALL_DIR/.env" ]] && grep -q "TELEGRAM_BOT_TOKEN" "$INSTALL_DIR/.env"; then
+        echo "Found existing bot token in .env"
+        read -p "Keep existing token? (Y/n): " KEEP_TOKEN
+        if [[ "$KEEP_TOKEN" =~ ^[Nn]$ ]]; then
+             read -p "Enter Telegram Bot Token: " BOT_TOKEN
+             cat > "$INSTALL_DIR/.env" << EOF
+TELEGRAM_BOT_TOKEN=$BOT_TOKEN
+EOF
+             chmod 600 "$INSTALL_DIR/.env"
+        fi
+    else
+        read -p "Enter Telegram Bot Token: " BOT_TOKEN
+        cat > "$INSTALL_DIR/.env" << EOF
+TELEGRAM_BOT_TOKEN=$BOT_TOKEN
+EOF
+        chmod 600 "$INSTALL_DIR/.env"
+    fi
+    
+    # Telegram Chat ID
+    echo ""
+    echo "💬 Telegram Chat ID"
+    echo "────────────────────────────────────────"
+    echo "To get your chat ID:"
+    echo "1. Message @userinfobot on Telegram"
+    echo "2. Copy your ID (number)"
+    echo ""
+    read -p "Enter Telegram Chat ID: " CHAT_ID
+    
+    # Update config.yaml with chat_id
+    run_sed "s/YOUR_CHAT_ID_HERE/$CHAT_ID/" "$INSTALL_DIR/config.yaml"
+    
+    # Server description
+    echo ""
+    read -p "Enter server description (optional): " SERVER_DESC
+    if [[ -n "$SERVER_DESC" ]]; then
+        run_sed "s/description: \".*\"/description: \"$SERVER_DESC\"/" "$INSTALL_DIR/config.yaml"
+    fi
+    
+    log_success "Single mode configured"
+}
+
+configure_master() {
     echo ""
     echo "🔧 Master Server Configuration"
     echo "────────────────────────────────────────"
@@ -406,103 +465,101 @@ configure_master_settings() {
     # Set mode to master
     run_sed "s/^mode: .*/mode: master/" "$INSTALL_DIR/config.yaml"
     
-    # API Token
-    echo "The API token is a shared secret used by nodes to authenticate with the master."
-    read -p "Enter shared API token for master and all nodes (leave empty to auto-generate): " API_TOKEN
+    # Telegram Bot Token (Master needs it to send reports)
+    echo ""
+    echo "🤖 Telegram Bot Configuration"
+    if [[ -f "$INSTALL_DIR/.env" ]] && grep -q "TELEGRAM_BOT_TOKEN" "$INSTALL_DIR/.env"; then
+        echo "Found existing bot token in .env"
+        read -p "Keep existing token? (Y/n): " KEEP_TOKEN
+        if [[ "$KEEP_TOKEN" =~ ^[Nn]$ ]]; then
+             read -p "Enter Telegram Bot Token: " BOT_TOKEN
+             cat > "$INSTALL_DIR/.env" << EOF
+TELEGRAM_BOT_TOKEN=$BOT_TOKEN
+EOF
+             chmod 600 "$INSTALL_DIR/.env"
+        fi
+    else
+        read -p "Enter Telegram Bot Token: " BOT_TOKEN
+        cat > "$INSTALL_DIR/.env" << EOF
+TELEGRAM_BOT_TOKEN=$BOT_TOKEN
+EOF
+        chmod 600 "$INSTALL_DIR/.env"
+    fi
+
+    # Default Admin Chat ID
+    echo ""
+    echo "💬 Default Admin Chat ID"
+    echo "This chat will receive aggregated reports."
+    read -p "Enter Chat ID: " CHAT_ID
     
-    if [[ -z "$API_TOKEN" ]]; then
+    # Ask for language and view mode
+    read -p "Default language (ru/en) [ru]: " DEF_LANG
+    DEF_LANG=${DEF_LANG:-ru}
+    
+    read -p "Default view mode (compact/detailed) [compact]: " DEF_VIEW
+    DEF_VIEW=${DEF_VIEW:-compact}
+
+    # Update telegram_targets
+    TARGETS_JSON="[{\"chat_id\": $CHAT_ID, \"default_language\": \"$DEF_LANG\", \"default_view_mode\": \"$DEF_VIEW\"}]"
+    
+    log_info "Updating Telegram targets..."
+    cd "$INSTALL_DIR"
+    patch_config_with_python "add_targets" "$TARGETS_JSON"
+    
+    # API Token
+    echo ""
+    echo "🔑 API Token"
+    echo "The API token is a shared secret used by nodes to authenticate with the master."
+    
+    EXISTING_TOKEN=$(grep "api_token:" "$INSTALL_DIR/config.yaml" | head -n 1 | awk -F'"' '{print $2}')
+    if [[ "$EXISTING_TOKEN" != "CHANGE_ME_SHARED_SECRET_TOKEN" && -n "$EXISTING_TOKEN" ]]; then
+        echo "Found existing API token: $EXISTING_TOKEN"
+        read -p "Keep existing token? (Y/n): " KEEP_API_TOKEN
+        if [[ "$KEEP_API_TOKEN" =~ ^[Nn]$ ]]; then
+             API_TOKEN=$(openssl rand -hex 32)
+             echo "Generated new token: $API_TOKEN"
+             run_sed "s/api_token: \".*\"/api_token: \"$API_TOKEN\"/" "$INSTALL_DIR/config.yaml"
+        else
+             API_TOKEN=$EXISTING_TOKEN
+        fi
+    else
         API_TOKEN=$(openssl rand -hex 32)
         echo "Generated token: $API_TOKEN"
+        run_sed "s/api_token: \"CHANGE_ME_SHARED_SECRET_TOKEN\"/api_token: \"$API_TOKEN\"/" "$INSTALL_DIR/config.yaml"
     fi
     
-    # Replace api_token in master section
-    run_sed "s/api_token: \"CHANGE_ME_SHARED_SECRET_TOKEN\"/api_token: \"$API_TOKEN\"/" "$INSTALL_DIR/config.yaml"
+    # Master Report Interval
+    echo ""
+    echo "⏱️ Master Report Interval"
+    echo "How often should the master send aggregated reports?"
+    echo "1) 5 minutes"
+    echo "2) 15 minutes"
+    echo "3) 30 minutes"
+    echo "4) 60 minutes"
+    echo "5) Custom"
+    read -p "Select option [4]: " INTERVAL_OPT
     
-    # Schedule Interval
-    read -p "Enter master report interval in minutes (default 60): " INTERVAL
+    case $INTERVAL_OPT in
+        1) INTERVAL=5 ;;
+        2) INTERVAL=15 ;;
+        3) INTERVAL=30 ;;
+        4) INTERVAL=60 ;;
+        5) read -p "Enter interval in minutes: " INTERVAL ;;
+        *) INTERVAL=60 ;;
+    esac
+    
     if [[ -n "$INTERVAL" && "$INTERVAL" =~ ^[0-9]+$ ]]; then
+        # NOTE: this assumes the default interval_minutes in config.yaml.example is 60
         run_sed "s/interval_minutes: 60/interval_minutes: $INTERVAL/" "$INSTALL_DIR/config.yaml"
-    else
-        INTERVAL=60
     fi
     
-    # Send Immediately
-    read -p "Send report immediately on each node result? (y/N): " SEND_IMMEDIATELY
-    if [[ "$SEND_IMMEDIATELY" =~ ^[Yy]$ ]]; then
-        run_sed "s/send_immediately: false/send_immediately: true/" "$INSTALL_DIR/config.yaml"
-        SEND_IMMEDIATELY_VAL="true"
-    else
-        SEND_IMMEDIATELY_VAL="false"
-    fi
+    # Configure local node?
+    configure_local_master_node
     
-    # Node Timeout
-    read -p "Node timeout in minutes (default 120): " TIMEOUT
-    if [[ -n "$TIMEOUT" && "$TIMEOUT" =~ ^[0-9]+$ ]]; then
-        run_sed "s/node_timeout_minutes: 120/node_timeout_minutes: $TIMEOUT/" "$INSTALL_DIR/config.yaml"
-    fi
-
-    # Telegram Targets
-    echo ""
-    echo "👥 Telegram Recipients"
-    echo "You can add multiple Telegram chats/groups to receive reports."
-    
-    TARGETS_JSON="["
-    FIRST_TARGET=true
-    
-    while true; do
-        echo ""
-        if [[ $FIRST_TARGET == true ]]; then
-            read -p "Add a Telegram recipient? (Y/n): " ADD_TARGET
-            if [[ "$ADD_TARGET" =~ ^[Nn]$ ]]; then
-                break
-            fi
-        else
-            read -p "Add another recipient? (y/N): " ADD_TARGET
-            if [[ ! "$ADD_TARGET" =~ ^[Yy]$ ]]; then
-                break
-            fi
-        fi
-        
-        read -p "  Enter Chat ID: " T_CHAT_ID
-        if [[ -z "$T_CHAT_ID" ]]; then
-            echo "  Skipping..."
-            continue
-        fi
-        
-        read -p "  Language (ru/en) [ru]: " T_LANG
-        T_LANG=${T_LANG:-ru}
-        
-        read -p "  View Mode (compact/detailed) [compact]: " T_VIEW
-        T_VIEW=${T_VIEW:-compact}
-        
-        if [[ $FIRST_TARGET == false ]]; then
-            TARGETS_JSON="$TARGETS_JSON,"
-        fi
-        TARGETS_JSON="$TARGETS_JSON {\"chat_id\": $T_CHAT_ID, \"default_language\": \"$T_LANG\", \"default_view_mode\": \"$T_VIEW\"}"
-        FIRST_TARGET=false
-    done
-    TARGETS_JSON="$TARGETS_JSON]"
-    
-    if [[ "$TARGETS_JSON" != "[]" ]]; then
-        log_info "Updating Telegram targets..."
-        cd "$INSTALL_DIR"
-        patch_config_with_python "add_targets" "$TARGETS_JSON"
-    fi
-    
-    echo ""
-    log_info "Master Configuration Summary:"
-    echo "  Mode: master"
-    echo "  API Token: $API_TOKEN"
-    echo "  Report Interval: $INTERVAL min"
-    echo "  Send Immediately: $SEND_IMMEDIATELY_VAL"
-    echo ""
-    echo "To edit master settings later, open: $INSTALL_DIR/config.yaml"
-    echo "After changing config, run:"
-    echo "  sudo systemctl daemon-reload"
-    echo "  sudo systemctl restart speedtest-master.service"
+    log_success "Master mode configured"
 }
 
-configure_node_settings() {
+configure_node() {
     echo ""
     echo "🔧 Node Configuration"
     echo "────────────────────────────────────────"
@@ -513,7 +570,14 @@ configure_node_settings() {
     # Node ID
     read -p "Enter node_id (must match key in master's nodes_meta, e.g. fin, lv, ger): " NODE_ID
     if [[ -n "$NODE_ID" ]]; then
+        # NOTE: this assumes the default node_id in config.yaml.example is "fin"
         run_sed "s/node_id: \"fin\"/node_id: \"$NODE_ID\"/" "$INSTALL_DIR/config.yaml"
+    fi
+    
+    # Description
+    read -p "Enter node description: " NODE_DESC
+    if [[ -n "$NODE_DESC" ]]; then
+        run_sed "s/description: \".*\"/description: \"$NODE_DESC\"/" "$INSTALL_DIR/config.yaml"
     fi
     
     # Master URL
@@ -521,6 +585,7 @@ configure_node_settings() {
     if [[ -n "$MASTER_URL" ]]; then
         # Escape slashes for sed
         ESCAPED_URL=$(echo "$MASTER_URL" | sed 's/\//\\\//g')
+        # NOTE: this assumes the default master_url in config.yaml.example is "http://YOUR_MASTER_IP:8080/api/v1/report"
         run_sed "s/master_url: \"http:\/\/YOUR_MASTER_IP:8080\/api\/v1\/report\"/master_url: \"$ESCAPED_URL\"/" "$INSTALL_DIR/config.yaml"
     fi
     
@@ -530,18 +595,30 @@ configure_node_settings() {
         run_sed "s/api_token: \"CHANGE_ME_SHARED_SECRET_TOKEN\"/api_token: \"$API_TOKEN\"/" "$INSTALL_DIR/config.yaml"
     fi
     
+    # Speedtest Interval
     echo ""
-    log_info "Node Configuration Summary:"
-    echo "  Mode: node"
-    echo "  Node ID: $NODE_ID"
-    echo "  Master URL: $MASTER_URL"
-    echo ""
-    log_warning "Ensure API Token matches the Master's token!"
-    echo ""
-    echo "To edit node settings later, open: $INSTALL_DIR/config.yaml"
-    echo "After changing config, run:"
-    echo "  sudo systemctl daemon-reload"
-    echo "  sudo systemctl restart speedtest-monitor.service"
+    echo "⏱️ Speedtest Interval"
+    echo "How often should this node run speedtests?"
+    echo "1) 5 minutes"
+    echo "2) 15 minutes"
+    echo "3) 30 minutes"
+    echo "4) 60 minutes"
+    echo "5) Custom (systemd OnCalendar format, e.g. *:0/10)"
+    read -p "Select option [4]: " INTERVAL_OPT
+    
+    case $INTERVAL_OPT in
+        1) TIMER_SPEC="*:0\/5" ;;
+        2) TIMER_SPEC="*:0\/15" ;;
+        3) TIMER_SPEC="*:0\/30" ;;
+        4) TIMER_SPEC="hourly" ;;
+        5) read -p "Enter OnCalendar value: " TIMER_SPEC ;;
+        *) TIMER_SPEC="hourly" ;;
+    esac
+    
+    # Update systemd timer
+    run_sed "s/OnCalendar=.*/OnCalendar=$TIMER_SPEC/" "$INSTALL_DIR/systemd/speedtest-monitor.timer"
+    
+    log_success "Node mode configured"
 }
 
 configure_local_master_node() {
@@ -564,19 +641,13 @@ configure_local_master_node() {
         # Update config for local node
         run_sed "s/^mode: .*/mode: node/" "$CONFIG_FILE"
         run_sed "s/node_id: .*/node_id: \"master_node\"/" "$CONFIG_FILE"
-        run_sed "s/description: .*/description: \"🇷🇺 Master Server (local node)\"/" "$CONFIG_FILE"
+        run_sed "s/description: .*/description: \"Master Server (local node)\"/" "$CONFIG_FILE"
         
         # Set Master URL to localhost
         local LOCAL_URL="http:\/\/127.0.0.1:8080\/api\/v1\/report"
         run_sed "s/master_url: .*/master_url: \"$LOCAL_URL\"/" "$CONFIG_FILE"
         
-        # Ensure API token is set (it should be copied, but let's be sure if it was replaced in master config)
-        # If the master config has the token set, it's already in the file we copied.
-        # But wait, in master config, the api_token is under `master:`. In node config, it is under `node:`.
-        # The `config.yaml.example` has `api_token` in both sections with placeholder.
-        # When we configured master, we replaced the one in `master:` section (hopefully).
-        # Let's explicitly set the one in `node:` section of the new file.
-        
+        # Ensure API token is set
         run_sed "s/api_token: \"CHANGE_ME_SHARED_SECRET_TOKEN\"/api_token: \"$API_TOKEN\"/" "$CONFIG_FILE"
         
         # Create Systemd Service
@@ -615,7 +686,7 @@ EOF
         cd "$INSTALL_DIR"
         
         # JSON data for the node
-        NODE_JSON="{\"node_id\": \"master_node\", \"flag\": \"🇷🇺\", \"display_name\": \"Master Server (Local)\"}"
+        NODE_JSON="{\"node_id\": \"master_node\", \"flag\": \"🏠\", \"display_name\": \"Master Server (Local)\"}"
         
         patch_config_with_python "add_node_meta" "$NODE_JSON"
         patch_config_with_python "add_node_order" "$NODE_JSON"
@@ -647,51 +718,13 @@ configure_app() {
         return 0
     fi
     
-    # Telegram Bot Token
-    echo ""
-    echo "🤖 Telegram Bot Configuration"
-    echo "────────────────────────────────────────"
-    echo "To get a bot token:"
-    echo "1. Message @BotFather on Telegram"
-    echo "2. Send /newbot and follow instructions"
-    echo "3. Copy the token provided"
-    echo ""
-    read -p "Enter Telegram Bot Token: " BOT_TOKEN
-    
-    # Telegram Chat ID
-    echo ""
-    echo "💬 Telegram Chat ID"
-    echo "────────────────────────────────────────"
-    echo "To get your chat ID:"
-    echo "1. Message @userinfobot on Telegram"
-    echo "2. Copy your ID (number)"
-    echo ""
-    read -p "Enter Telegram Chat ID: " CHAT_ID
-    
-    # Update .env file
-    cat > .env << EOF
-TELEGRAM_BOT_TOKEN=$BOT_TOKEN
-EOF
-    
-    chmod 600 .env
-    log_success "Configuration saved to $INSTALL_DIR/.env"
-    
-    # Update config.yaml with chat_id
-    run_sed "s/YOUR_CHAT_ID_HERE/$CHAT_ID/" "config.yaml"
-    
-    # Server description
-    echo ""
-    read -p "Enter server description (optional): " SERVER_DESC
-    if [[ -n "$SERVER_DESC" ]]; then
-        run_sed "s/description: \".*\"/description: \"$SERVER_DESC\"/" "config.yaml"
-    fi
-    
-    # Mode specific configuration
+    # Dispatch based on mode
     if [[ "$INSTALL_MODE" == "master" ]]; then
-        configure_master_settings
-        configure_local_master_node
+        configure_master
     elif [[ "$INSTALL_MODE" == "node" ]]; then
-        configure_node_settings
+        configure_node
+    else
+        configure_single
     fi
     
     log_success "Application configured"
@@ -902,4 +935,8 @@ main() {
 }
 
 # Run main installation
-main
+if [[ "$COMMAND" == "uninstall" ]]; then
+    do_uninstall
+else
+    main
+fi

@@ -35,35 +35,17 @@ master:
   node_timeout_minutes: 120
 
   # Order of nodes in the report (determines sorting)
-  nodes_order:
-    - fin
-    - lv
-    - ger
-    - nl
-    - us
-    - kz
+  nodes_order: []  # optional; if empty or missing, nodes are sorted by node_id alphabetically
 
   # Metadata for nodes (flags, display names)
   # Keys (fin, lv, etc.) must match 'node_id' in Node configs
   nodes_meta:
-    fin:
+    example-fi:
       flag: "🇫🇮"
-      display_name: "Finland my.deephost.pw"
-    lv:
-      flag: "🇱🇻"
-      display_name: "Latvia app.ml.cloud"
-    ger:
+      display_name: "Finland node #1"
+    example-de:
       flag: "🇩🇪"
-      display_name: "Germany my.qwins.co"
-    nl:
-      flag: "🇳🇱"
-      display_name: "Netherlands 62yun.ru"
-    us:
-      flag: "🇺🇸"
-      display_name: "USA my.deephost.pw"
-    kz:
-      flag: "🇰🇿"
-      display_name: "Kazakhstan my.adminvps.ru"
+      display_name: "Germany node #1"
 
   # Telegram recipients for aggregated reports
   telegram_targets:

@@ -86,28 +86,77 @@ openssl rand -hex 32
 
 ### 📥 Installation Guide
 
-#### 1. Master Server Installation
+#### 1. Single Mode (Standalone)
 
-The Master server collects data from all nodes and sends Telegram notifications.
+Runs speedtests and sends notifications directly.
+
+1. Run `./install.sh install single`
+2. Prompts:
+   - **Telegram Bot Token** (checks `.env` first)
+   - **Chat ID**
+   - **Server Description**
+
+#### 2. Master Server Installation
+
+Collects data from nodes and sends aggregated reports.
 
 1. Run `./install.sh install master`
-2. Follow the interactive prompts to configure:
-   - Telegram Bot Token and Chat ID
-   - **API Token** (auto-generated or manual)
-   - Report interval and immediate sending preference
+2. Prompts:
+   - **Telegram Bot Token** (checks `.env` first)
+   - **Default Admin Chat ID** (for reports)
+   - **Default Language** (ru/en) & **View Mode** (compact/detailed)
+   - **API Token** (generates new or reuses existing)
+   - **Report Interval** (5/15/30/60 min or custom)
    - **Optional:** Install a local node to monitor the master server's speed
-3. The installer will automatically update `config.yaml` and start the `speedtest-master` service.
 
-#### 2. Node Installation
+#### 3. Node Installation
 
-Nodes run speedtests and send results to the Master.
+Runs speedtests and sends results to the Master.
 
 1. Run `./install.sh install node`
-2. Follow the interactive prompts to configure:
-   - **Node ID** (must match an entry in Master's `nodes_meta`)
-   - **Master URL** (e.g., `http://MASTER_IP:8080/api/v1/report`)
+2. Prompts:
+   - **Node ID** (e.g. `fin`, `de-01`)
+   - **Description** (e.g. "Finland Node")
+   - **Master URL** (e.g. `http://MASTER_IP:8080/api/v1/report`)
    - **API Token** (must match the Master's token)
-3. The installer will automatically update `config.yaml` and start the `speedtest-monitor` timer.
+   - **Speedtest Interval** (5/15/30/60 min or custom)
+
+### ⚙️ Master Node Configuration
+
+The Master server uses `nodes_order` and `nodes_meta` in `config.yaml` to organize reports.
+
+#### Node Ordering (`nodes_order`)
+
+Controls the order of nodes in the report.
+
+```yaml
+nodes_order:
+  - fin
+  - de
+  - us
+```
+
+- Nodes listed here appear first, in this exact order.
+- Any other nodes are appended at the end, sorted alphabetically by `node_id`.
+- If empty or missing, all nodes are sorted alphabetically.
+
+#### Node Metadata (`nodes_meta`)
+
+Defines display names and flags for nodes.
+
+```yaml
+nodes_meta:
+  fin:
+    flag: "🇫🇮"
+    display_name: "Finland Node"
+  de:
+    flag: "🇩🇪"
+    display_name: "Germany Node"
+```
+
+- **Unknown Nodes:** If a node reports but is not in `nodes_meta`, the Master will:
+  - Log a warning with a suggested YAML snippet.
+  - Display it with a default flag (🛰️) and its `node_id` as the name.
 
 ### 🔄 Migration Guide (Single -> Master/Node)
 
