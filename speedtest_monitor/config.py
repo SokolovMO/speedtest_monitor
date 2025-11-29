@@ -203,7 +203,9 @@ def load_config(config_path: Path) -> Config:
         # Get chat_ids from YAML (ONLY from config.yaml, not from .env)
         chat_ids = telegram_yaml.get("chat_ids", [])
         
-        if not chat_ids:
+        # Validate chat_ids only if NOT in node mode
+        mode = yaml_config.get("mode", "single")
+        if mode != "node" and not chat_ids:
             raise ConfigurationError(
                 "At least one chat_id must be specified in config.yaml under telegram.chat_ids"
             )

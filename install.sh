@@ -810,6 +810,9 @@ try:
         },
         "thresholds": {
             "very_low": 50,
+            "low": 200,
+            "medium": 500,
+            "good": 1000,
         },
     }
     
