@@ -335,63 +335,59 @@ patch_config_with_python() {
 import sys
 import re
 import json
+import yaml
 
 action = sys.argv[1]
 data = json.loads(sys.argv[2])
 config_path = "config.yaml"
 
-with open(config_path, "r") as f:
-    lines = f.readlines()
-
-new_lines = []
-i = 0
-while i < len(lines):
-    line = lines[i]
+if action == "add_targets":
+    with open(config_path, "r") as f:
+        cfg = yaml.safe_load(f) or {}
     
-    if action == "add_targets" and "telegram_targets:" in line:
-        new_lines.append(line)
-        # Skip existing targets
-        i += 1
-        while i < len(lines) and (lines[i].strip().startswith("-") or lines[i].strip().startswith("chat_id") or lines[i].strip().startswith("default") or not lines[i].strip()):
-             if not lines[i].strip(): # Keep empty lines? Maybe not inside the block
-                 pass 
-             i += 1
+    if "master" not in cfg:
+        cfg["master"] = {}
+    
+    # data is the list of targets
+    cfg["master"]["telegram_targets"] = data
+    
+    with open(config_path, "w") as f:
+        yaml.safe_dump(cfg, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+
+else:
+    with open(config_path, "r") as f:
+        lines = f.readlines()
+
+    new_lines = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
         
-        # Insert new targets
-        for target in data:
-            new_lines.append(f"    - chat_id: {target['chat_id']}\n")
-            new_lines.append(f"      default_language: \"{target['default_language']}\"\n")
-            new_lines.append(f"      default_view_mode: \"{target['default_view_mode']}\"\n")
-            new_lines.append("\n")
-        
-        # Continue with current line (which is the start of next section or whatever stopped the loop)
-        continue
+        if action == "add_node_meta" and "nodes_meta:" in line:
+            new_lines.append(line)
+            # Append new node meta immediately
+            node_id = data['node_id']
+            flag = data['flag']
+            name = data['display_name']
+            new_lines.append(f"    {node_id}:\n")
+            new_lines.append(f"      flag: \"{flag}\"\n")
+            new_lines.append(f"      display_name: \"{name}\"\n")
+            i += 1
+            continue
 
-    elif action == "add_node_meta" and "nodes_meta:" in line:
+        elif action == "add_node_order" and "nodes_order:" in line:
+            new_lines.append(line)
+            # Append to order list
+            node_id = data['node_id']
+            new_lines.append(f"    - {node_id}\n")
+            i += 1
+            continue
+
         new_lines.append(line)
-        # Append new node meta immediately
-        node_id = data['node_id']
-        flag = data['flag']
-        name = data['display_name']
-        new_lines.append(f"    {node_id}:\n")
-        new_lines.append(f"      flag: \"{flag}\"\n")
-        new_lines.append(f"      display_name: \"{name}\"\n")
         i += 1
-        continue
 
-    elif action == "add_node_order" and "nodes_order:" in line:
-        new_lines.append(line)
-        # Append to order list
-        node_id = data['node_id']
-        new_lines.append(f"    - {node_id}\n")
-        i += 1
-        continue
-
-    new_lines.append(line)
-    i += 1
-
-with open(config_path, "w") as f:
-    f.writelines(new_lines)
+    with open(config_path, "w") as f:
+        f.writelines(new_lines)
 EOF
 
     .venv/bin/python patch_config.py "$action" "$data"
@@ -502,6 +498,33 @@ EOF
     # Update telegram_targets
     TARGETS_JSON="[{\"chat_id\": $CHAT_ID, \"default_language\": \"$DEF_LANG\", \"default_view_mode\": \"$DEF_VIEW\"}]"
     
+    # Loop for additional targets
+    while true; do
+        echo ""
+        read -p "Do you want to add another Telegram target? (y/N): " ADD_MORE
+        if [[ ! "$ADD_MORE" =~ ^[Yy]$ ]]; then
+            break
+        fi
+
+        read -p "Enter Chat ID: " CHAT_ID2
+        if [[ -z "$CHAT_ID2" ]]; then
+            echo "Skipping empty Chat ID..."
+            continue
+        fi
+
+        read -p "Default language (ru/en) [ru]: " LANG2
+        LANG2=${LANG2:-ru}
+        
+        read -p "Default view mode (compact/detailed) [compact]: " VIEW2
+        VIEW2=${VIEW2:-compact}
+
+        # Append to JSON array
+        # Remove closing bracket
+        TARGETS_JSON="${TARGETS_JSON%]}"
+        # Add comma and new object and closing bracket
+        TARGETS_JSON="${TARGETS_JSON}, {\"chat_id\": $CHAT_ID2, \"default_language\": \"$LANG2\", \"default_view_mode\": \"$VIEW2\"}]"
+    done
+    
     log_info "Updating Telegram targets..."
     cd "$INSTALL_DIR"
     patch_config_with_python "add_targets" "$TARGETS_JSON"
@@ -512,21 +535,46 @@ EOF
     echo "The API token is a shared secret used by nodes to authenticate with the master."
     
     EXISTING_TOKEN=$(grep "api_token:" "$INSTALL_DIR/config.yaml" | head -n 1 | awk -F'"' '{print $2}')
-    if [[ "$EXISTING_TOKEN" != "CHANGE_ME_SHARED_SECRET_TOKEN" && -n "$EXISTING_TOKEN" ]]; then
-        echo "Found existing API token: $EXISTING_TOKEN"
-        read -p "Keep existing token? (Y/n): " KEEP_API_TOKEN
-        if [[ "$KEEP_API_TOKEN" =~ ^[Nn]$ ]]; then
-             API_TOKEN=$(openssl rand -hex 32)
-             echo "Generated new token: $API_TOKEN"
-             run_sed "s/api_token: \".*\"/api_token: \"$API_TOKEN\"/" "$INSTALL_DIR/config.yaml"
-        else
-             API_TOKEN=$EXISTING_TOKEN
-        fi
-    else
-        API_TOKEN=$(openssl rand -hex 32)
-        echo "Generated token: $API_TOKEN"
-        run_sed "s/api_token: \"CHANGE_ME_SHARED_SECRET_TOKEN\"/api_token: \"$API_TOKEN\"/" "$INSTALL_DIR/config.yaml"
-    fi
+    
+    echo "How do you want to set it?"
+    echo "1) Keep existing"
+    echo "2) Auto-generate new (recommended)"
+    echo "3) Enter manually"
+    read -p "Select option [2]: " TOKEN_OPT
+    
+    API_TOKEN=""
+    
+    case $TOKEN_OPT in
+        1)
+            if [[ "$EXISTING_TOKEN" != "CHANGE_ME_SHARED_SECRET_TOKEN" && -n "$EXISTING_TOKEN" ]]; then
+                API_TOKEN="$EXISTING_TOKEN"
+                echo "Keeping existing token."
+            else
+                echo "No valid existing token found. Generating new one."
+                API_TOKEN=$(openssl rand -hex 32)
+                run_sed "s/api_token: \".*\"/api_token: \"$API_TOKEN\"/" "$INSTALL_DIR/config.yaml"
+            fi
+            ;;
+        3)
+            read -p "Enter API token (will be used by all nodes): " API_TOKEN
+            if [[ -z "$API_TOKEN" ]]; then
+                 echo "Empty token provided. Generating new one."
+                 API_TOKEN=$(openssl rand -hex 32)
+            fi
+            run_sed "s/api_token: \".*\"/api_token: \"$API_TOKEN\"/" "$INSTALL_DIR/config.yaml"
+            ;;
+        *)
+            # Default to 2 (Auto-generate)
+            API_TOKEN=$(openssl rand -hex 32)
+            echo "Generated new token: $API_TOKEN"
+            run_sed "s/api_token: \".*\"/api_token: \"$API_TOKEN\"/" "$INSTALL_DIR/config.yaml"
+            ;;
+    esac
+    
+    echo ""
+    echo "Final API token (share this with your nodes):"
+    echo "$API_TOKEN"
+    echo ""
     
     # Master Report Interval
     echo ""
@@ -648,7 +696,7 @@ configure_local_master_node() {
         run_sed "s/master_url: .*/master_url: \"$LOCAL_URL\"/" "$CONFIG_FILE"
         
         # Ensure API token is set
-        run_sed "s/api_token: \"CHANGE_ME_SHARED_SECRET_TOKEN\"/api_token: \"$API_TOKEN\"/" "$CONFIG_FILE"
+        run_sed "s/api_token: \".*\"/api_token: \"$API_TOKEN\"/" "$CONFIG_FILE"
         
         # Create Systemd Service
         cat << EOF | sudo tee "$INSTALL_DIR/systemd/speedtest-master-node.service" > /dev/null
@@ -916,6 +964,13 @@ main() {
     if [[ "$INSTALL_MODE" == "master" ]]; then
         echo "1. Verify configuration: cd $INSTALL_DIR && .venv/bin/python -m speedtest_monitor.main"
         echo "2. Check master service status: sudo systemctl status speedtest-master.service"
+        
+        API_TOKEN=$(grep "api_token:" "$INSTALL_DIR/config.yaml" | head -n 1 | awk -F'"' '{print $2}')
+        if [[ -n "$API_TOKEN" ]]; then
+             echo ""
+             echo "🔑 Current API token (for nodes): $API_TOKEN"
+        fi
+        
         if [[ -f "$INSTALL_DIR/systemd/speedtest-master-node.timer" ]]; then
             echo "3. Check local node status: sudo systemctl status speedtest-master-node.timer"
         fi
