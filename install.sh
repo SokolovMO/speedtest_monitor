@@ -587,6 +587,7 @@ EOF
     log_info "Applying master configuration..."
     
     cat << EOF > "$INSTALL_DIR/configure_master.py"
+# -*- coding: utf-8 -*-
 import yaml
 import sys
 import argparse
@@ -704,6 +705,7 @@ configure_node() {
     log_info "Applying node configuration..."
     
     cat << EOF > "$INSTALL_DIR/configure_node.py"
+# -*- coding: utf-8 -*-
 import yaml
 import sys
 
@@ -767,6 +769,7 @@ configure_local_master_node() {
         
         # Use Python to safely update the config and add to master meta
         cat << EOF > "$INSTALL_DIR/update_local_node.py"
+# -*- coding: utf-8 -*-
 import yaml
 import sys
 import os
@@ -1015,7 +1018,7 @@ setup_systemd() {
         
         sudo systemctl daemon-reload
         sudo systemctl enable speedtest-master.service
-        sudo systemctl start speedtest-master.service
+        sudo systemctl restart speedtest-master.service
         
         log_success "Master service configured and started"
         log_info "Check status: sudo systemctl status speedtest-master.service"
