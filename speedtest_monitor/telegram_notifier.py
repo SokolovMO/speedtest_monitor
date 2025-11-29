@@ -30,6 +30,7 @@ from .constants import (
 )
 from .logger import get_logger
 from .speedtest_runner import SpeedtestResult
+from .utils import get_system_info, get_location_by_ip
 from speedtest_monitor.message_formatter import MessageFormatter
 
 logger = get_logger()
