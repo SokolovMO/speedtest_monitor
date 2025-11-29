@@ -184,7 +184,40 @@ install_speedtest() {
             
             # Install Ookla repo and package
             curl -s https://packagecloud.io/install/repositories/ookla/speedtest-cli/script.deb.sh | sudo bash
-            sudo apt-get install -y speedtest
+            
+            if ! sudo apt-get install -y speedtest; then
+                log_warning "apt-get failed to install speedtest. Trying snap..."
+                if command -v snap &> /dev/null; then
+                    sudo snap install speedtest
+                else
+                    log_warning "Snap not found. Attempting manual binary installation..."
+                    ARCH=$(uname -m)
+                    URL=""
+                    if [ "$ARCH" = "x86_64" ]; then
+                        URL="https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-x86_64.tgz"
+                    elif [ "$ARCH" = "aarch64" ]; then
+                        URL="https://install.speedtest.net/app/cli/ookla-speedtest-1.2.0-linux-aarch64.tgz"
+                    fi
+                    
+                    if [ -n "$URL" ]; then
+                        if ! command -v wget &> /dev/null; then
+                            sudo apt-get install -y wget
+                        fi
+                        wget -qO speedtest.tgz "$URL"
+                        if [ -f speedtest.tgz ]; then
+                            tar -xvf speedtest.tgz speedtest
+                            sudo mv speedtest /usr/bin/
+                            sudo chown root:root /usr/bin/speedtest
+                            rm speedtest.tgz speedtest.md speedtest.5 2>/dev/null || true
+                            log_success "Speedtest installed manually"
+                        else
+                            log_error "Failed to download speedtest binary"
+                        fi
+                    else
+                        log_error "Unsupported architecture for manual download: $ARCH"
+                    fi
+                fi
+            fi
             ;;
         centos|rhel|fedora)
             log_info "Installing official Ookla Speedtest..."
