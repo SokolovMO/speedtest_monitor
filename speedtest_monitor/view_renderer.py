@@ -41,6 +41,26 @@ def _get_aggregated_status(status_key: str, language: str, config: Optional[Stat
     return emoji, label
 
 
+def _get_detailed_status_display(node_status: str, derived_status: str, language: str, config: Optional[StatusConfig] = None) -> Tuple[str, str]:
+    """
+    Get emoji and label for a status, preferring detailed single_node_statuses.
+    """
+    # Try to find exact match in single_node_statuses
+    if config and config.single_node_statuses and node_status in config.single_node_statuses:
+        cfg = config.single_node_statuses[node_status]
+        label = cfg.label.get(language, node_status)
+        return cfg.emoji, label
+    
+    # Fallback to derived status (ok/degraded)
+    status_key = "ok"
+    if derived_status == "degraded":
+        status_key = "degraded"
+    elif derived_status == "offline":
+        status_key = "offline"
+        
+    return _get_aggregated_status(status_key, language, config)
+
+
 def render_compact(report: AggregatedReport, language: str, status_config: Optional[StatusConfig] = None) -> str:
     """
     Render report in compact view.
@@ -66,11 +86,12 @@ def render_compact(report: AggregatedReport, language: str, status_config: Optio
             ping = f"{node.last_result.ping_ms:.1f}"
             
             # Determine status
-            status_key = "ok"
-            if node.derived_status == "degraded":
-                status_key = "degraded"
-            
-            status_emoji, status_text = _get_aggregated_status(status_key, language, status_config)
+            status_emoji, status_text = _get_detailed_status_display(
+                node.last_result.status,
+                node.derived_status,
+                language,
+                status_config
+            )
             
             lines.append(
                 f"{flag} {name} — {dl} / {ul} Mbps, ping {ping} ms — {status_emoji} {status_text}"
@@ -127,11 +148,12 @@ def render_detailed(report: AggregatedReport, language: str, status_config: Opti
             ping = f"{node.last_result.ping_ms:.1f}"
             
             # Status
-            status_key = "ok"
-            if node.derived_status == "degraded":
-                status_key = "degraded"
-                
-            status_emoji, status_text = _get_aggregated_status(status_key, language, status_config)
+            status_emoji, status_text = _get_detailed_status_display(
+                node.last_result.status,
+                node.derived_status,
+                language,
+                status_config
+            )
             
             lines.append(f"⬇️ {dl_label}: {dl} Mbps")
             lines.append(f"⬆️ {ul_label}: {ul} Mbps")

@@ -215,9 +215,11 @@ def run_node(config, logger):
         elif dl >= config.thresholds.medium:
             status = "good"
         elif dl >= config.thresholds.low:
-            status = "degraded"
+            status = "normal"
+        elif dl >= config.thresholds.very_low:
+            status = "low"
         else:
-            status = "degraded"
+            status = "very_low"
     else:
         status = "failed"
 

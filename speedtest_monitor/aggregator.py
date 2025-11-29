@@ -114,9 +114,9 @@ class Aggregator:
                 if now - last_update <= timeout_delta:
                     is_online = True
                     # Map speedtest status to aggregated status
-                    if last_result.status in ["excellent", "good"]:
+                    if last_result.status in ["excellent", "good", "normal"]:
                         derived_status = "ok"
-                    elif last_result.status == "degraded":
+                    elif last_result.status in ["degraded", "low", "very_low"]:
                         derived_status = "degraded"
                     else:
                         # failed, no_data, or unknown
