@@ -64,6 +64,27 @@ class LoggingConfig:
 
 
 @dataclass
+class SingleNodeStatusConfig:
+    """Configuration for a single node status."""
+    emoji: str
+    label: Dict[str, str]
+
+
+@dataclass
+class AggregatedStatusConfig:
+    """Configuration for an aggregated status."""
+    emoji: str
+    label: Dict[str, str]
+
+
+@dataclass
+class StatusConfig:
+    """Status configuration."""
+    single_node_statuses: Dict[str, SingleNodeStatusConfig] = field(default_factory=dict)
+    aggregated_statuses: Dict[str, AggregatedStatusConfig] = field(default_factory=dict)
+
+
+@dataclass
 class NodeMetaConfig:
     """Metadata for a node in master configuration."""
     flag: Optional[str] = None
@@ -121,6 +142,7 @@ class Config:
     mode: str = "single"
     master: Optional[MasterConfig] = None
     node: Optional[NodeConfig] = None
+    status_config: Optional[StatusConfig] = None
 
 
 class ConfigurationError(Exception):
@@ -239,6 +261,24 @@ def load_config(config_path: Path) -> Config:
             n_data = yaml_config["node"]
             node_config = NodeConfig(**n_data)
 
+        # Parse Status configuration
+        status_config = None
+        if "status_config" in yaml_config:
+            s_data = yaml_config["status_config"]
+            
+            single_node_statuses = {}
+            for key, val in s_data.get("single_node_statuses", {}).items():
+                single_node_statuses[key] = SingleNodeStatusConfig(**val)
+                
+            aggregated_statuses = {}
+            for key, val in s_data.get("aggregated_statuses", {}).items():
+                aggregated_statuses[key] = AggregatedStatusConfig(**val)
+                
+            status_config = StatusConfig(
+                single_node_statuses=single_node_statuses,
+                aggregated_statuses=aggregated_statuses
+            )
+
         return Config(
             server=server_config,
             speedtest=speedtest_config,
@@ -248,6 +288,7 @@ def load_config(config_path: Path) -> Config:
             mode=yaml_config.get("mode", "single"),
             master=master_config,
             node=node_config,
+            status_config=status_config,
         )
     except TypeError as e:
         raise ConfigurationError(f"Invalid configuration format: {e}")

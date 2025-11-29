@@ -193,3 +193,48 @@ logging:
 
 # Home Server:
 # thresholds: {very_low: 10, low: 50, medium: 100, good: 200}
+
+# ============================================
+# Status Configuration (Optional)
+# ============================================
+status_config:
+  # Statuses used in SINGLE-NODE telegram notifications
+  single_node_statuses:
+    very_low:
+      emoji: "🚨❌"
+      label:
+        en: "Very Low"
+        ru: "Очень низко"
+    low:
+      emoji: "⚠️🐌"
+      label:
+        en: "Low"
+        ru: "Низко"
+    normal:
+      emoji: "✅🚗"
+      label:
+        en: "Normal"
+        ru: "Нормально"
+    good:
+      emoji: "👍🛜"
+      label:
+        en: "Good"
+        ru: "Хорошо"
+    excellent:
+      emoji: "🚀⚡"
+      label:
+        en: "Excellent"
+        ru: "Отлично"
+
+  # Statuses used in aggregated master reports
+  aggregated_statuses:
+    ok:
+      emoji: "✅"
+      label:
+        en: "Good"
+        ru: "Хорошо"
+    degraded:
+      emoji: "⚠️"
+      label:
+        en: "Degraded"
+        ru: "Просадка"

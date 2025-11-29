@@ -21,6 +21,11 @@ LABELS = {
         "ok": "Good",
         "degraded": "Degraded",
         "last_hour": "last hour",
+        "status_very_low": "Very Low",
+        "status_low": "Low",
+        "status_normal": "Normal",
+        "status_good": "Good",
+        "status_excellent": "Excellent",
     },
     "ru": {
         "report_title": "📊 Отчет о скорости интернета",
@@ -36,6 +41,11 @@ LABELS = {
         "ok": "Хорошо",
         "degraded": "Просадка",
         "last_hour": "последний час",
+        "status_very_low": "Очень низко",
+        "status_low": "Низко",
+        "status_normal": "Нормально",
+        "status_good": "Хорошо",
+        "status_excellent": "Отлично",
     },
 }
 

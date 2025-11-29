@@ -148,6 +148,33 @@ For scripted deployments (Ansible, cloud-init, etc.), use the `--auto` flag to s
 (Optional, on Master)
 ```
 
+### 🎨 Status Configuration
+
+You can customize the emojis and text labels for speed statuses in `config.yaml`.
+
+- **Single Node:** Configure emojis and bilingual labels for each speed threshold (`very_low`, `low`, `normal`, `good`, `excellent`).
+- **Aggregated Report:** Configure emojis and labels for `ok` and `degraded` statuses.
+
+Example configuration:
+
+```yaml
+status_config:
+  single_node_statuses:
+    good:
+      emoji: "👍"
+      label:
+        en: "Good"
+        ru: "Хорошо"
+  aggregated_statuses:
+    ok:
+      emoji: "✅"
+      label:
+        en: "All Systems Operational"
+        ru: "Все системы в норме"
+```
+
+The language used for notifications is determined by per-chat preferences (defaulting to Russian if not set).
+
 ### ✅ Verification
 
 To verify the Master installation:

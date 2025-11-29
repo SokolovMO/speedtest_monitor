@@ -4,35 +4,44 @@ View renderer module.
 Converts aggregated reports into formatted text messages.
 """
 
+from typing import Optional, Tuple
+from speedtest_monitor.config import StatusConfig
 from speedtest_monitor.localization import get_label
 from speedtest_monitor.models import AggregatedReport, NodeAggregatedStatus
 
 
-def _get_status_emoji(status: str) -> str:
-    """Get emoji for status."""
-    if status == "ok":
-        return "✅"
-    elif status == "degraded":
-        return "⚠️"
-    elif status == "offline":
-        return "🔴"
-    return "❓"
+def _get_aggregated_status(status_key: str, language: str, config: Optional[StatusConfig] = None) -> Tuple[str, str]:
+    """
+    Get emoji and label for aggregated status.
+    
+    Args:
+        status_key: Status key ("ok", "degraded")
+        language: Language code
+        config: Status configuration
+        
+    Returns:
+        Tuple of (emoji, label)
+    """
+    # Default emojis matching current behavior
+    default_emojis = {
+        "ok": "✅",
+        "degraded": "⚠️",
+        "offline": "🔴"
+    }
+    
+    emoji = default_emojis.get(status_key, "❓")
+    label = get_label(status_key, language)
+    
+    if config and config.aggregated_statuses and status_key in config.aggregated_statuses:
+        cfg = config.aggregated_statuses[status_key]
+        emoji = cfg.emoji
+        if cfg.label.get(language):
+            label = cfg.label.get(language)
+            
+    return emoji, label
 
 
-def _get_detailed_status_emoji(speedtest_status: str) -> str:
-    """Get emoji for detailed status description."""
-    if speedtest_status == "excellent":
-        return "🚀"
-    elif speedtest_status == "good":
-        return "👍"
-    elif speedtest_status == "degraded":
-        return "⚠️"
-    elif speedtest_status == "failed":
-        return "❌"
-    return "❓"
-
-
-def render_compact(report: AggregatedReport, language: str) -> str:
+def render_compact(report: AggregatedReport, language: str, status_config: Optional[StatusConfig] = None) -> str:
     """
     Render report in compact view.
     
@@ -44,7 +53,6 @@ def render_compact(report: AggregatedReport, language: str) -> str:
     """
     title = get_label("report_title", language)
     last_hour = get_label("last_hour", language)
-    time_str = report.generated_at.strftime("%H:%M")
     
     lines = [f"<b>{title}</b> ({last_hour})", ""]
     
@@ -57,13 +65,12 @@ def render_compact(report: AggregatedReport, language: str) -> str:
             ul = f"{node.last_result.upload_mbps:.0f}"
             ping = f"{node.last_result.ping_ms:.1f}"
             
-            # Determine status label
-            status_label_key = "ok"
+            # Determine status
+            status_key = "ok"
             if node.derived_status == "degraded":
-                status_label_key = "degraded"
+                status_key = "degraded"
             
-            status_text = get_label(status_label_key, language)
-            status_emoji = _get_detailed_status_emoji(node.last_result.status)
+            status_emoji, status_text = _get_aggregated_status(status_key, language, status_config)
             
             lines.append(
                 f"{flag} {name} — {dl} / {ul} Mbps, ping {ping} ms — {status_emoji} {status_text}"
@@ -75,7 +82,7 @@ def render_compact(report: AggregatedReport, language: str) -> str:
     return "\n".join(lines)
 
 
-def render_detailed(report: AggregatedReport, language: str) -> str:
+def render_detailed(report: AggregatedReport, language: str, status_config: Optional[StatusConfig] = None) -> str:
     """
     Render report in detailed view.
     
@@ -123,8 +130,8 @@ def render_detailed(report: AggregatedReport, language: str) -> str:
             status_key = "ok"
             if node.derived_status == "degraded":
                 status_key = "degraded"
-            status_text = get_label(status_key, language)
-            status_emoji = _get_detailed_status_emoji(node.last_result.status)
+                
+            status_emoji, status_text = _get_aggregated_status(status_key, language, status_config)
             
             lines.append(f"⬇️ {dl_label}: {dl} Mbps")
             lines.append(f"⬆️ {ul_label}: {ul} Mbps")
