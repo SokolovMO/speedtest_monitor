@@ -315,28 +315,11 @@ class TelegramNotifier:
             
             # Send to all chat_ids (supports both groups and personal messages)
             for chat_id in self.config.telegram.chat_ids:
-                # Determine language and style from preferences
+                # In Single Mode, we use configuration directly since there are no interactive buttons
                 lang = self.config.telegram.language if hasattr(self.config.telegram, "language") else "ru"
-                view_mode = "detailed" # Default fallback
-                
-                try:
-                    cid = int(chat_id)
-                    defaults = ChatPreferences(
-                        chat_id=cid,
-                        language=lang,
-                        view_mode="detailed", # Default for single mode
-                        created_at=datetime.now(),
-                        updated_at=datetime.now(),
-                    )
-                    prefs = ensure_default_preferences(cid, defaults)
-                    lang = prefs.language
-                    view_mode = prefs.view_mode
-                except ValueError:
-                    # If chat_id is not an int, fallback to default
-                    pass
+                view_mode = self.config.telegram.message_style if hasattr(self.config.telegram, "message_style") else "detailed"
 
                 message = self._format_message(result, lang, style=view_mode)
-                # keyboard = self._get_keyboard(lang, view_mode) # Buttons don't work in single mode (no daemon)
                 
                 # Validate message length
                 if len(message) > MAX_MESSAGE_LENGTH:

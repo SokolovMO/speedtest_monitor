@@ -140,6 +140,14 @@ telegram:
   # Message format: "html" or "markdown"
   format: "html"
 
+  # Language for notifications (ru/en)
+  language: "ru"
+
+  # Message style for Single Mode (compact/detailed)
+  # - compact: Short one-line summary
+  # - detailed: Full report with server info and ping
+  message_style: "detailed"
+
 # Logging configuration
 logging:
   # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
