@@ -272,6 +272,9 @@ class MessageFormatter:
                 msg.append(f"🔹 <b>{flag} {name}</b>")
                 
                 if node.is_online and node.last_result:
+                    if node.last_result.description:
+                        msg.append(f"   📝 {node.last_result.description}")
+
                     dl = format_speed(node.last_result.download_mbps)
                     ul = format_speed(node.last_result.upload_mbps)
                     ping = format_ping(node.last_result.ping_ms)

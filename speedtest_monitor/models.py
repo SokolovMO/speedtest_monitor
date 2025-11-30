@@ -27,6 +27,7 @@ class SpeedtestResult:
     test_server: str
     isp: str
     os_info: str
+    description: Optional[str] = None
 
 
 @dataclass
@@ -44,6 +45,7 @@ class NodeReportPayload:
     test_server: str
     isp: str
     os_info: str
+    description: Optional[str] = None
 
 
 @dataclass

@@ -45,7 +45,8 @@ async def send_result_to_master(result: SpeedtestResult, config: Config) -> bool
         status=result.status,
         test_server=result.test_server,
         isp=result.isp,
-        os_info=result.os_info
+        os_info=result.os_info,
+        description=result.description
     )
     
     url = config.node.master_url

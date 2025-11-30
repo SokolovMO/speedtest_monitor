@@ -162,7 +162,8 @@ class APIServer:
                     status=status,
                     test_server=f"{runner_result.server_name} ({runner_result.server_location})",
                     isp=runner_result.isp,
-                    os_info=os_info
+                    os_info=os_info,
+                    description=self.config.server.description if hasattr(self.config, "server") else None
                 )
                 
                 # Update Aggregator directly
@@ -257,6 +258,7 @@ class APIServer:
                 test_server=payload.test_server,
                 isp=payload.isp,
                 os_info=payload.os_info,
+                description=payload.description
             )
 
             # 4. Update Aggregator

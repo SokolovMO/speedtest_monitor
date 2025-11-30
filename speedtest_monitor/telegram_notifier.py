@@ -336,14 +336,14 @@ class TelegramNotifier:
                     pass
 
                 message = self._format_message(result, lang, style=view_mode)
-                keyboard = self._get_keyboard(lang, view_mode)
+                # keyboard = self._get_keyboard(lang, view_mode) # Buttons don't work in single mode (no daemon)
                 
                 # Validate message length
                 if len(message) > MAX_MESSAGE_LENGTH:
                     logger.warning(f"Message too long ({len(message)} chars), truncating...")
                     message = message[:MAX_MESSAGE_LENGTH - 3] + "..."
 
-                if await self._send_to_recipient(bot, chat_id, message, reply_markup=keyboard):
+                if await self._send_to_recipient(bot, chat_id, message):
                     success_count += 1
             
             if success_count > 0:

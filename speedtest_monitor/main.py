@@ -233,7 +233,8 @@ def run_node(config, logger):
         status=status,
         test_server=f"{runner_result.server_name} ({runner_result.server_location})",
         isp=runner_result.isp,
-        os_info=os_info
+        os_info=os_info,
+        description=config.server.description
     )
     
     # 4. Send to Master
