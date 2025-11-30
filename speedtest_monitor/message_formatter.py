@@ -183,6 +183,16 @@ class MessageFormatter:
         # Success Handling
         emoji, status_text = MessageFormatter._get_status_info(status_key, lang, status_config)
 
+        if style == "compact":
+            # Truly compact mode: Header + Results + Status
+            msg = [
+                f"<b>{header}</b>",
+                f"⬇️ {format_speed(result.download_mbps)} | ⬆️ {format_speed(result.upload_mbps)} | 📡 {format_ping(result.ping_ms)}",
+                f"{emoji} {status_text}"
+            ]
+            return "\n".join(msg)
+
+        # Detailed mode
         msg = [
             f"<b>{header}</b>",
             "",
@@ -197,29 +207,22 @@ class MessageFormatter:
             "",
         ])
 
-        if style == "detailed":
-            msg.extend([
-                f"📶 <b>{s('results')}:</b>",
-                f"⬇️ <b>{s('download')}:</b> {format_speed(result.download_mbps)}",
-                f"⬆️ <b>{s('upload')}:</b> {format_speed(result.upload_mbps)}",
-                f"📡 <b>{s('ping')}:</b> {format_ping(result.ping_ms)}",
-                "",
-                f"📈 <b>{s('status')}:</b> {emoji} {status_text}",
-                ""
-            ])
+        msg.extend([
+            f"📶 <b>{s('results')}:</b>",
+            f"⬇️ <b>{s('download')}:</b> {format_speed(result.download_mbps)}",
+            f"⬆️ <b>{s('upload')}:</b> {format_speed(result.upload_mbps)}",
+            f"📡 <b>{s('ping')}:</b> {format_ping(result.ping_ms)}",
+            "",
+            f"📈 <b>{s('status')}:</b> {emoji} {status_text}",
+            ""
+        ])
+        
+        if result.server_location:
+            msg.append(f"🌐 <b>{s('test_server')}:</b> {result.server_location}")
+        if result.isp:
+            msg.append(f"🏢 <b>{s('isp')}:</b> {result.isp}")
             
-            if result.server_location:
-                msg.append(f"🌐 <b>{s('test_server')}:</b> {result.server_location}")
-            if result.isp:
-                msg.append(f"🏢 <b>{s('isp')}:</b> {result.isp}")
-                
-            msg.append(f"💻 <b>{s('os')}:</b> {system_info['os']} {system_info['os_version']}")
-            
-        else: # Compact style for single mode
-            msg.extend([
-                f"⬇️ {format_speed(result.download_mbps)} | ⬆️ {format_speed(result.upload_mbps)} | 📡 {format_ping(result.ping_ms)}",
-                f"{emoji} {status_text}"
-            ])
+        msg.append(f"💻 <b>{s('os')}:</b> {system_info['os']} {system_info['os_version']}")
 
         return "\n".join(msg)
 
